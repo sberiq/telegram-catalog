@@ -225,13 +225,7 @@ body.main-page .info-instruction {
     color: #ffffff;
 }
 
-.user-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid #4b5563;
-}
+/* user-avatar styles removed */
 
 .user-name {
     color: #ffffff;
@@ -1958,35 +1952,9 @@ body.main-page .info-instruction {
     border-bottom: 1px solid #374151;
 }
 
-.profile-avatar-section {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-}
+/* profile-avatar styles removed */
 
-.profile-avatar {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 3px solid #4b5563;
-}
-
-.edit-avatar-btn {
-    background: #374151;
-    border: 1px solid #4b5563;
-    color: #d1d5db;
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.edit-avatar-btn:hover {
-    background: #4b5563;
-}
+/* edit-avatar-btn styles removed */
 
 .profile-info h4 {
     color: #ffffff;
@@ -2210,29 +2178,7 @@ body.main-page .info-instruction {
     font-size: 10px;
 }
 
-/* Admin user management styles */
-.admin-item-avatar {
-    margin-right: 15px;
-}
-
-.user-avatar-small {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    object-fit: cover;
-}
-
-.user-avatar-large {
-    text-align: center;
-    margin-bottom: 20px;
-}
-
-.user-avatar-large-img {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    object-fit: cover;
-}
+/* Admin user management styles - avatar styles removed */
 
 .admin-badge {
     background: linear-gradient(135deg, #ffd700, #ffed4e);

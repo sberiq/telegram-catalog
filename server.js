@@ -457,9 +457,6 @@ app.post('/api/telegram/widget-auth', (req, res) => {
                     ?, ?, ?, ?, ?, ?)
         `;
         
-        // Generate Telegram avatar URL
-        const avatarUrl = user.photo_url || `https://t.me/i/userpic/320/${user.id}.jpg`;
-        
         db.run(userQuery, [
             user.id,
             user.username || null,
@@ -478,7 +475,7 @@ app.post('/api/telegram/widget-auth', (req, res) => {
             deviceInfo.device_type,
             deviceInfo.browser,
             deviceInfo.os,
-            avatarUrl
+            null // avatar_url removed
         ], function(err) {
             if (err) {
                 console.error('Error creating/updating user:', err);
@@ -1333,9 +1330,6 @@ app.get('/api/user/me', (req, res) => {
             return;
         }
         
-        // Use profile avatar if available, otherwise use Telegram avatar
-        const avatarUrl = user.profile_avatar_url || user.avatar_url || `https://t.me/i/userpic/320/${user.telegram_id}.jpg`;
-        
         res.json({
             id: user.telegram_id,
             username: user.username,
@@ -1345,7 +1339,6 @@ app.get('/api/user/me', (req, res) => {
             is_premium: user.is_premium,
             nickname: user.nickname,
             bio: user.bio,
-            avatar_url: avatarUrl,
             is_verified: user.is_verified || false,
             is_admin: !!user.admin_id,
             admin_username: user.admin_username
@@ -1383,9 +1376,6 @@ app.get('/api/user/:userId/profile', (req, res) => {
             return;
         }
         
-        // Use profile avatar if available, otherwise use Telegram avatar
-        const avatarUrl = user.profile_avatar_url || user.avatar_url || `https://t.me/i/userpic/320/${user.telegram_id}.jpg`;
-        
         res.json({
             id: user.telegram_id,
             username: user.username,
@@ -1393,7 +1383,6 @@ app.get('/api/user/:userId/profile', (req, res) => {
             last_name: user.last_name,
             nickname: user.nickname,
             bio: user.bio,
-            avatar_url: avatarUrl,
             is_verified: user.is_verified || false,
             verified_at: user.verified_at,
             reviews_count: user.reviews_count || 0,

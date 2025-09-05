@@ -1545,11 +1545,6 @@ function displayAdminUsers(users, pagination) {
         </div>
         ${users.map(user => `
             <div class="admin-item">
-                <div class="admin-item-avatar">
-                    <img src="${user.avatar_url || `https://t.me/i/userpic/320/${user.telegram_id}.jpg`}" 
-                         alt="Avatar" class="user-avatar-small" 
-                         onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNFNUU3RUIiLz4KPHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI4IiB5PSI4Ij4KPHBhdGggZD0iTTIwIDIxdi0yYTQgNCAwIDAgMC00LTRIOGE0IDQgMCAwIDAtNCA0djIiIHN0cm9rZT0iIzlDQTNBRiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPGNpcmNsZSBjeD0iMTIiIGN5PSI3IiByPSI0IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo8L3N2Zz4K'">
-                </div>
                 <div class="admin-item-info">
                     <div class="admin-item-title">
                         ${user.first_name || ''} ${user.last_name || ''} 
@@ -1743,11 +1738,6 @@ async function viewUserDetails(userId) {
                 </div>
                 <div class="modal-body">
                     <div class="user-details">
-                        <div class="user-avatar-large">
-                            <img src="${user.avatar_url || `https://t.me/i/userpic/320/${user.telegram_id}.jpg`}" 
-                                 alt="Avatar" class="user-avatar-large-img"
-                                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iNDAiIGN5PSI0MCIgcj0iNDAiIGZpbGw9IiNFNUU3RUIiLz4KPHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSIxNiIgeT0iMTYiPgo8cGF0aCBkPSJNMjQgMzJ2LTJhNCA0IDAgMCAwLTQtNEg4YTQgNCAwIDAgMC00IDR2MiIgc3Ryb2tlPSIjOUNBM0FGIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8Y2lyY2xlIGN4PSIxMiIgY3k9IjEwIiByPSI0IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo8L3N2Zz4K'">
-                        </div>
                         <div class="user-info">
                             <h4>${user.first_name || ''} ${user.last_name || ''} 
                                 ${user.username ? `(@${user.username})` : ''}
@@ -2108,13 +2098,7 @@ async function loadProfileData() {
         document.getElementById('profileId').textContent = `ID: ${profile.id}`;
         document.getElementById('profileBio').value = profile.bio || '';
         
-        // Update avatar
-        const profileAvatar = document.getElementById('profileAvatar');
-        if (profile.avatar_url) {
-            profileAvatar.src = profile.avatar_url;
-        } else {
-            profileAvatar.src = `https://t.me/i/userpic/320/${profile.id}.jpg` || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iNDAiIGN5PSI0MCIgcj0iNDAiIGZpbGw9IiM2MzY2RjEiLz4KPHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSIyMCIgeT0iMjAiPgo8cGF0aCBkPSJNMjAgMEMzMS4wNDU3IDAgNDAgOC45NTQzIDQwIDIwQzQwIDMxLjA0NTcgMzEuMDQ1NyA0MCAyMCA0MEM4Ljk1NDMgNDAgMCAzMS4wNDU3IDAgMjBDMCA4Ljk1NDMgOC45NTQzIDAgMjAgMFoiIGZpbGw9IiNGRkYiLz4KPHBhdGggZD0iTTIwIDEwQzI1LjUyMjggMTAgMzAgMTQuNDc3MiAzMCAyMEMzMCAyNS41MjI4IDI1LjUyMjggMzAgMjAgMzBDMTQuNDc3MiAzMCAxMCAyNS41MjI4IDEwIDIwQzEwIDE0LjQ3NzIgMTQuNDc3MiAxMCAyMCAxMFoiIGZpbGw9IiM2MzY2RjEiLz4KPC9zdmc+Cjwvc3ZnPg==';
-        }
+        // Avatar removed
         
         // Show verified badge
         const profileVerifiedBadge = document.getElementById('profileVerifiedBadge');
@@ -2219,10 +2203,7 @@ async function saveProfile() {
     }
 }
 
-function editAvatar() {
-    // Simple avatar editing - just show a message for now
-    showInfo('Функция изменения аватара будет добавлена позже');
-}
+// editAvatar function removed
 
 async function toggleFavorite(channelId) {
     if (!isUserAuthenticated()) {
