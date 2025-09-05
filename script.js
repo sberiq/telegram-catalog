@@ -1680,6 +1680,16 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Update auth UI
     updateAuthUI();
+    
+    // Ensure user dropdown is closed on page load
+    const userDropdown = document.getElementById('userDropdown');
+    const profileBtn = document.getElementById('profileBtn');
+    if (userDropdown) {
+        userDropdown.classList.add('hidden');
+    }
+    if (profileBtn) {
+        profileBtn.classList.remove('active');
+    }
 });
 
 // User Menu Functions
@@ -1705,6 +1715,19 @@ document.addEventListener('click', function(event) {
     if (userMenu && !userMenu.contains(event.target)) {
         dropdown.classList.add('hidden');
         profileBtn.classList.remove('active');
+    }
+});
+
+// Close dropdown when pressing Escape
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const dropdown = document.getElementById('userDropdown');
+        const profileBtn = document.getElementById('profileBtn');
+        
+        if (dropdown && !dropdown.classList.contains('hidden')) {
+            dropdown.classList.add('hidden');
+            profileBtn.classList.remove('active');
+        }
     }
 });
 

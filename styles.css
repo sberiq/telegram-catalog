@@ -1763,6 +1763,10 @@ body.main-page .info-instruction {
     padding: 20px;
 }
 
+.hidden {
+    display: none !important;
+}
+
 .modal.hidden {
     display: none;
 }
