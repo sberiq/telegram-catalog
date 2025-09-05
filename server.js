@@ -2877,6 +2877,44 @@ app.post('/api/admin/reviews/:id/reject', (req, res) => {
     });
 });
 
+// Update channel
+app.put('/api/admin/channels/:id', (req, res) => {
+    const channelId = req.params.id;
+    const { title, description, link, status, rejection_reason } = req.body;
+    
+    if (!title || !description || !link) {
+        res.status(400).json({ error: 'Missing required fields' });
+        return;
+    }
+    
+    // Validate Telegram link format
+    if (!link.match(/^https:\/\/t\.me\/[a-zA-Z0-9_]+$/)) {
+        res.status(400).json({ error: 'Invalid Telegram link format' });
+        return;
+    }
+    
+    const query = `
+        UPDATE channels 
+        SET title = ?, description = ?, link = ?, status = ?, rejection_reason = ?
+        WHERE id = ?
+    `;
+    
+    db.run(query, [title, description, link, status, rejection_reason, channelId], function(err) {
+        if (err) {
+            console.error('Error updating channel:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (this.changes === 0) {
+            res.status(404).json({ error: 'Channel not found' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'Channel updated successfully' });
+    });
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

@@ -2202,12 +2202,12 @@ body.main-page .info-instruction {
 
 .user-info h4 {
     margin: 0 0 10px 0;
-    color: #f9fafb;
+    color: #333;
 }
 
 .user-info p {
     margin: 5px 0;
-    color: #d1d5db;
+    color: #666;
 }
 
 .user-sessions {
@@ -2217,7 +2217,7 @@ body.main-page .info-instruction {
 .session-item {
     background: #1f2937;
     border: 1px solid #374151;
-    padding: 12px;
+    padding: 10px;
     border-radius: 8px;
     margin-bottom: 10px;
 }
@@ -2229,7 +2229,7 @@ body.main-page .info-instruction {
 }
 
 .pagination-info {
-    color: #9ca3af;
+    color: #666;
     font-size: 14px;
     margin-top: 5px;
 }
@@ -2301,6 +2301,45 @@ body.main-page .info-instruction {
     background: #1f2937;
     border-radius: 8px;
     border: 1px solid #374151;
+}
+
+/* Edit channel modal styles */
+.form-select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    background: #1f2937;
+    color: #e5e7eb;
+    font-size: 14px;
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.btn-secondary {
+    background: #6b7280;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #4b5563;
 }
 
 /* Yandex Ads Section */

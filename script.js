@@ -2615,3 +2615,138 @@ async function rejectReview(reviewId) {
         showError('Ошибка отклонения отзыва');
     }
 }
+
+// Edit channel function
+async function editChannel(channelId) {
+    try {
+        // Get channel details
+        const response = await fetch(`/api/channels/${channelId}`);
+        const channel = await response.json();
+        
+        if (!response.ok) {
+            showError('Ошибка загрузки данных канала');
+            return;
+        }
+        
+        // Show edit modal
+        showEditChannelModal(channel);
+    } catch (error) {
+        console.error('Error loading channel for edit:', error);
+        showError('Ошибка загрузки данных канала');
+    }
+}
+
+function showEditChannelModal(channel) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('editChannelModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'editChannelModal';
+        modal.className = 'modal hidden';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Редактировать канал</h3>
+                    <button class="close-btn" onclick="closeEditChannelModal()">&times;</button>
+                </div>
+                <form id="editChannelForm">
+                    <div class="form-group">
+                        <label for="editChannelTitle">Название:</label>
+                        <input type="text" id="editChannelTitle" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editChannelDescription">Описание:</label>
+                        <textarea id="editChannelDescription" class="form-textarea" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="editChannelLink">Ссылка:</label>
+                        <input type="url" id="editChannelLink" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editChannelStatus">Статус:</label>
+                        <select id="editChannelStatus" class="form-select">
+                            <option value="pending">На модерации</option>
+                            <option value="approved">Одобрен</option>
+                            <option value="rejected">Отклонен</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editChannelRejectionReason">Причина отклонения (если применимо):</label>
+                        <textarea id="editChannelRejectionReason" class="form-textarea"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="closeEditChannelModal()">Отмена</button>
+                        <button type="submit" class="submit-button">Сохранить</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    // Fill form with channel data
+    document.getElementById('editChannelTitle').value = channel.title;
+    document.getElementById('editChannelDescription').value = channel.description;
+    document.getElementById('editChannelLink').value = channel.link;
+    document.getElementById('editChannelStatus').value = channel.status || 'pending';
+    document.getElementById('editChannelRejectionReason').value = channel.rejection_reason || '';
+    
+    // Store channel ID for form submission
+    modal.dataset.channelId = channel.id;
+    
+    // Show modal
+    modal.classList.remove('hidden');
+    
+    // Add form submit handler
+    document.getElementById('editChannelForm').onsubmit = handleEditChannel;
+}
+
+function closeEditChannelModal() {
+    const modal = document.getElementById('editChannelModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.getElementById('editChannelForm').reset();
+    }
+}
+
+async function handleEditChannel(e) {
+    e.preventDefault();
+    
+    const modal = document.getElementById('editChannelModal');
+    const channelId = modal.dataset.channelId;
+    
+    const formData = {
+        title: document.getElementById('editChannelTitle').value,
+        description: document.getElementById('editChannelDescription').value,
+        link: document.getElementById('editChannelLink').value,
+        status: document.getElementById('editChannelStatus').value,
+        rejection_reason: document.getElementById('editChannelRejectionReason').value
+    };
+    
+    try {
+        const response = await fetch(`/api/admin/channels/${channelId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        if (response.ok) {
+            showSuccess('Канал обновлен');
+            closeEditChannelModal();
+            // Reload current admin tab
+            if (currentAdminTab === 'channels') {
+                loadAdminChannels();
+            } else if (currentAdminTab === 'channels-moderation') {
+                loadAdminChannelsModeration();
+            }
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Ошибка обновления канала');
+        }
+    } catch (error) {
+        console.error('Error updating channel:', error);
+        showError('Ошибка обновления канала');
+    }
+}
