@@ -14,7 +14,7 @@ NC='\033[0m'
 
 # Configuration - ОБЯЗАТЕЛЬНО ИЗМЕНИТЕ НА ВАШИ ДАННЫЕ!
 SERVER_USER="root"
-SERVER_HOST="your-server-ip"
+SERVER_HOST="144.31.165.36"
 SERVER_PATH="/var/www/telegram-catalog"
 
 # Проверка конфигурации

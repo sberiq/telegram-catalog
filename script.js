@@ -181,7 +181,7 @@ function hideAllPages() {
     document.body.classList.remove('main-page');
 }
 
-// Main search functionality
+// Enhanced main search functionality
 async function performMainSearch() {
     const searchInput = document.getElementById('mainSearchInput');
     const query = searchInput.value.trim();
@@ -193,39 +193,121 @@ async function performMainSearch() {
     }
     
     try {
-        const response = await fetch(`/api/channels/search?q=${encodeURIComponent(query)}`);
-        const channels = await response.json();
-        displayMainSearchResults(channels);
+        // Show loading state
+        const resultsContainer = document.getElementById('mainSearchResults');
+        const resultsList = document.getElementById('mainResultsList');
+        const resultsCount = document.getElementById('mainResultsCount');
+        
+        resultsCount.textContent = 'Поиск...';
+        resultsList.innerHTML = '<div class="loading">Ищем каналы и теги...</div>';
+        resultsContainer.classList.remove('hidden');
+        
+        // Search channels, tags, and channels by tag
+        const [channelsResponse, tagsResponse, channelsByTagResponse] = await Promise.all([
+            fetch(`/api/channels/search?q=${encodeURIComponent(query)}`),
+            fetch(`/api/tags/search?q=${encodeURIComponent(query)}`),
+            fetch(`/api/channels/by-tag?tag=${encodeURIComponent(query)}`)
+        ]);
+        
+        const channels = await channelsResponse.json();
+        const tags = await tagsResponse.json();
+        const channelsByTag = await channelsByTagResponse.json();
+        
+        // Combine channels and remove duplicates
+        const allChannels = [...channels, ...channelsByTag];
+        const uniqueChannels = allChannels.filter((channel, index, self) => 
+            index === self.findIndex(c => c.id === channel.id)
+        );
+        
+        displayMainSearchResults(uniqueChannels, tags, query);
     } catch (error) {
-        console.error('Error searching channels:', error);
+        console.error('Error searching:', error);
         showError('Ошибка поиска');
     }
 }
 
-function displayMainSearchResults(channels) {
+function displayMainSearchResults(channels, tags, query) {
     const resultsContainer = document.getElementById('mainSearchResults');
     const resultsList = document.getElementById('mainResultsList');
     const resultsCount = document.getElementById('mainResultsCount');
     
-    resultsCount.textContent = `Показано - ${channels.length} результатов`;
+    const totalResults = channels.length + tags.length;
+    resultsCount.textContent = `Найдено: ${channels.length} каналов, ${tags.length} тегов`;
     
-    if (channels.length === 0) {
-        resultsList.innerHTML = '<div class="loading">Каналы не найдены</div>';
-    } else {
-        resultsList.innerHTML = channels.map(channel => `
-            <div class="result-card">
-                <div class="channel-name">${escapeHtml(channel.title)}</div>
-                <div class="channel-description">${escapeHtml(channel.description)}</div>
-                <div class="rating-section">
-                    <span class="rating-label">Рейтинг:</span>
-                    <div class="stars">${channel.stars}</div>
-                    <span class="rating-text">(${channel.avg_rating}/5)</span>
-                </div>
-                <button class="details-button" onclick="showChannelDetails(${channel.id})">
-                    Подробнее
-                </button>
+    if (totalResults === 0) {
+        resultsList.innerHTML = `
+            <div class="no-results">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <p>По запросу "${escapeHtml(query)}" ничего не найдено</p>
+                <span>Попробуйте изменить запрос или использовать другие слова</span>
             </div>
-        `).join('');
+        `;
+    } else {
+        let html = '';
+        
+        // Display tags first
+        if (tags.length > 0) {
+            html += `
+                <div class="search-section">
+                    <h4 class="search-section-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                            <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                        </svg>
+                        Теги (${tags.length})
+                    </h4>
+                    <div class="tags-results">
+                        ${tags.map(tag => `
+                            <div class="tag-result" onclick="searchByTag('${escapeHtml(tag.name)}')">
+                                <span class="tag-name">${escapeHtml(tag.name)}</span>
+                                <span class="tag-count">${tag.channel_count} каналов</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Display channels
+        if (channels.length > 0) {
+            html += `
+                <div class="search-section">
+                    <h4 class="search-section-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        Каналы (${channels.length})
+                    </h4>
+                    <div class="channels-results">
+                        ${channels.map(channel => `
+                            <div class="result-card">
+                                <div class="channel-header">
+                                    <div class="channel-name">${escapeHtml(channel.title)}</div>
+                                    <div class="channel-rating">
+                                        <div class="stars">${channel.stars}</div>
+                                        <span class="rating-value">${channel.avg_rating}/5</span>
+                                    </div>
+                                </div>
+                                <div class="channel-description">${escapeHtml(channel.description)}</div>
+                                ${channel.tags && channel.tags.length > 0 ? `
+                                    <div class="channel-tags">
+                                        ${channel.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                                    </div>
+                                ` : ''}
+                                <button class="details-button" onclick="showChannelDetails(${channel.id})">
+                                    Подробнее
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        resultsList.innerHTML = html;
     }
     
     resultsContainer.classList.remove('hidden');
@@ -234,6 +316,149 @@ function displayMainSearchResults(channels) {
 function hideMainSearchResults() {
     const resultsContainer = document.getElementById('mainSearchResults');
     resultsContainer.classList.add('hidden');
+}
+
+// Show random channel
+async function showRandomChannel() {
+    try {
+        // Show loading state
+        const resultsContainer = document.getElementById('mainSearchResults');
+        const resultsList = document.getElementById('mainResultsList');
+        const resultsCount = document.getElementById('mainResultsCount');
+        
+        resultsCount.textContent = 'Поиск случайного кф...';
+        resultsList.innerHTML = '<div class="loading">Выбираем случайный кф...</div>';
+        resultsContainer.classList.remove('hidden');
+        
+        // Get random channel
+        const response = await fetch('/api/channels/random');
+        const channel = await response.json();
+        
+        if (response.ok) {
+            // Show the random channel
+            resultsCount.textContent = 'Случайный кф';
+            resultsList.innerHTML = `
+                <div class="search-section">
+                    <h4 class="search-section-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="1,4 1,10 7,10"></polyline>
+                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                        </svg>
+                        Случайный кф
+                    </h4>
+                    <div class="channels-results">
+                        <div class="result-card">
+                            <div class="channel-header">
+                                <div class="channel-name">${escapeHtml(channel.title)}</div>
+                                <div class="channel-rating">
+                                    <div class="stars">${channel.stars}</div>
+                                    <span class="rating-value">${channel.avg_rating}/5</span>
+                                </div>
+                            </div>
+                            <div class="channel-description">${escapeHtml(channel.description)}</div>
+                            ${channel.tags && channel.tags.length > 0 ? `
+                                <div class="channel-tags">
+                                    ${channel.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                                </div>
+                            ` : ''}
+                            <button class="details-button" onclick="showChannelDetails(${channel.id})">
+                                Подробнее
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            resultsCount.textContent = 'Ошибка';
+            resultsList.innerHTML = `
+                <div class="no-results">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                    </svg>
+                    <p>Не удалось найти случайный кф</p>
+                    <span>Попробуйте еще раз</span>
+                </div>
+            `;
+        }
+        
+        resultsContainer.classList.remove('hidden');
+    } catch (error) {
+        console.error('Error getting random channel:', error);
+        showError('Ошибка получения случайного кф');
+    }
+}
+
+// Search by tag function
+async function searchByTag(tagName) {
+    try {
+        // Show loading state
+        const resultsContainer = document.getElementById('mainSearchResults');
+        const resultsList = document.getElementById('mainResultsList');
+        const resultsCount = document.getElementById('mainResultsCount');
+        
+        resultsCount.textContent = 'Поиск...';
+        resultsList.innerHTML = '<div class="loading">Ищем каналы по тегу...</div>';
+        resultsContainer.classList.remove('hidden');
+        
+        // Search channels by tag
+        const response = await fetch(`/api/channels/by-tag?tag=${encodeURIComponent(tagName)}`);
+        const channels = await response.json();
+        
+        // Display results
+        resultsCount.textContent = `Найдено: ${channels.length} каналов по тегу "${tagName}"`;
+        
+        if (channels.length === 0) {
+            resultsList.innerHTML = `
+                <div class="no-results">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                        <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                    </svg>
+                    <p>По тегу "${escapeHtml(tagName)}" каналы не найдены</p>
+                </div>
+            `;
+        } else {
+            resultsList.innerHTML = `
+                <div class="search-section">
+                    <h4 class="search-section-title">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        Каналы с тегом "${escapeHtml(tagName)}" (${channels.length})
+                    </h4>
+                    <div class="channels-results">
+                        ${channels.map(channel => `
+                            <div class="result-card">
+                                <div class="channel-header">
+                                    <div class="channel-name">${escapeHtml(channel.title)}</div>
+                                    <div class="channel-rating">
+                                        <div class="stars">${channel.stars}</div>
+                                        <span class="rating-value">${channel.avg_rating}/5</span>
+                                    </div>
+                                </div>
+                                <div class="channel-description">${escapeHtml(channel.description)}</div>
+                                ${channel.tags && channel.tags.length > 0 ? `
+                                    <div class="channel-tags">
+                                        ${channel.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                                    </div>
+                                ` : ''}
+                                <button class="details-button" onclick="showChannelDetails(${channel.id})">
+                                    Подробнее
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        resultsContainer.classList.remove('hidden');
+    } catch (error) {
+        console.error('Error searching by tag:', error);
+        showError('Ошибка поиска по тегу');
+    }
 }
 
 // Legacy search functionality (for separate search page)

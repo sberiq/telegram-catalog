@@ -372,6 +372,175 @@ app.get('/api/channels', (req, res) => {
 });
 
 // Search channels
+// Enhanced search functions
+function convertKeyboardLayout(text) {
+    const ruToEn = {
+        'й': 'q', 'ц': 'w', 'у': 'e', 'к': 'r', 'е': 't', 'н': 'y', 'г': 'u', 'ш': 'i', 'щ': 'o', 'з': 'p',
+        'х': '[', 'ъ': ']', 'ф': 'a', 'ы': 's', 'в': 'd', 'а': 'f', 'п': 'g', 'р': 'h', 'о': 'j', 'л': 'k',
+        'д': 'l', 'ж': ';', 'э': "'", 'я': 'z', 'ч': 'x', 'с': 'c', 'м': 'v', 'и': 'b', 'т': 'n', 'ь': 'm',
+        'б': ',', 'ю': '.', 'ё': '`', 'Й': 'Q', 'Ц': 'W', 'У': 'E', 'К': 'R', 'Е': 'T', 'Н': 'Y', 'Г': 'U',
+        'Ш': 'I', 'Щ': 'O', 'З': 'P', 'Х': '[', 'Ъ': ']', 'Ф': 'A', 'Ы': 'S', 'В': 'D', 'А': 'F', 'П': 'G',
+        'Р': 'H', 'О': 'J', 'Л': 'K', 'Д': 'L', 'Ж': ';', 'Э': "'", 'Я': 'Z', 'Ч': 'X', 'С': 'C', 'М': 'V',
+        'И': 'B', 'Т': 'N', 'Ь': 'M', 'Б': ',', 'Ю': '.', 'Ё': '`'
+    };
+    
+    const enToRu = {
+        'q': 'й', 'w': 'ц', 'e': 'у', 'r': 'к', 't': 'е', 'y': 'н', 'u': 'г', 'i': 'ш', 'o': 'щ', 'p': 'з',
+        '[': 'х', ']': 'ъ', 'a': 'ф', 's': 'ы', 'd': 'в', 'f': 'а', 'g': 'п', 'h': 'р', 'j': 'о', 'k': 'л',
+        'l': 'д', ';': 'ж', "'": 'э', 'z': 'я', 'x': 'ч', 'c': 'с', 'v': 'м', 'b': 'и', 'n': 'т', 'm': 'ь',
+        ',': 'б', '.': 'ю', '`': 'ё', 'Q': 'Й', 'W': 'Ц', 'E': 'У', 'R': 'К', 'T': 'Е', 'Y': 'Н', 'U': 'Г',
+        'I': 'Ш', 'O': 'Щ', 'P': 'З', '[': 'Х', ']': 'Ъ', 'A': 'Ф', 'S': 'Ы', 'D': 'В', 'F': 'А', 'G': 'П',
+        'H': 'Р', 'J': 'О', 'K': 'Л', 'L': 'Д', ';': 'Ж', "'": 'Э', 'Z': 'Я', 'X': 'Ч', 'C': 'С', 'V': 'М',
+        'B': 'И', 'N': 'Т', 'M': 'Ь', ',': 'Б', '.': 'Ю', '`': 'Ё'
+    };
+    
+    let result = text;
+    
+    // Convert RU to EN
+    for (const [ru, en] of Object.entries(ruToEn)) {
+        result = result.replace(new RegExp(ru, 'g'), en);
+    }
+    
+    // If no conversion happened, try EN to RU
+    if (result === text) {
+        for (const [en, ru] of Object.entries(enToRu)) {
+            result = result.replace(new RegExp(en, 'g'), ru);
+        }
+    }
+    
+    return result;
+}
+
+// Generate all possible search variations
+function generateSearchVariations(query) {
+    const variations = new Set();
+    
+    // Original query
+    variations.add(query.toLowerCase());
+    variations.add(query.toUpperCase());
+    
+    // Keyboard layout conversions
+    const layoutConverted = convertKeyboardLayout(query);
+    variations.add(layoutConverted.toLowerCase());
+    variations.add(layoutConverted.toUpperCase());
+    
+    // Transliterations
+    const transliterated = transliterate(query);
+    variations.add(transliterated.toLowerCase());
+    variations.add(transliterated.toUpperCase());
+    
+    const reverseTransliterated = reverseTransliterate(query);
+    variations.add(reverseTransliterated.toLowerCase());
+    variations.add(reverseTransliterated.toUpperCase());
+    
+    // Combined conversions
+    const layoutThenTranslit = transliterate(layoutConverted);
+    variations.add(layoutThenTranslit.toLowerCase());
+    variations.add(layoutThenTranslit.toUpperCase());
+    
+    const layoutThenReverseTranslit = reverseTransliterate(layoutConverted);
+    variations.add(layoutThenReverseTranslit.toLowerCase());
+    variations.add(layoutThenReverseTranslit.toUpperCase());
+    
+    // Fuzzy variations (common typos)
+    const fuzzyVariations = generateFuzzyVariations(query);
+    fuzzyVariations.forEach(variation => {
+        variations.add(variation.toLowerCase());
+        variations.add(variation.toUpperCase());
+    });
+    
+    // Remove empty strings and return unique variations
+    return Array.from(variations).filter(v => v && v.trim().length > 0);
+}
+
+// Generate fuzzy search variations for common typos
+function generateFuzzyVariations(text) {
+    const variations = new Set();
+    
+    // Common character substitutions
+    const substitutions = {
+        'а': ['a', 'o'], 'о': ['a', 'o', '0'], 'е': ['e', 'ё'], 'ё': ['e', 'е'],
+        'и': ['i', '1'], 'й': ['i', 'y'], 'у': ['u', 'y'], 'ы': ['i', 'y'],
+        'ш': ['sh', 'w'], 'щ': ['sch', 'w'], 'ч': ['ch', '4'], 'ж': ['zh', 'g'],
+        'ц': ['ts', 'c'], 'х': ['h', 'x'], 'ъ': ['', '`'], 'ь': ['', '`'],
+        'з': ['z', '3'], 'с': ['s', 'c'], 'в': ['v', 'w'], 'б': ['b', '6'],
+        'п': ['p', 'n'], 'р': ['r', 'p'], 'т': ['t', '7'], 'д': ['d', 'g'],
+        'л': ['l', '1'], 'к': ['k', 'g'], 'м': ['m', 'n'], 'н': ['n', 'm'],
+        'г': ['g', 'h'], 'ф': ['f', 'ph'], 'я': ['ya', 'ia'], 'ю': ['yu', 'iu']
+    };
+    
+    // Generate variations with character substitutions
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i].toLowerCase();
+        if (substitutions[char]) {
+            substitutions[char].forEach(sub => {
+                const variation = text.substring(0, i) + sub + text.substring(i + 1);
+                variations.add(variation);
+            });
+        }
+    }
+    
+    // Generate variations with missing characters
+    for (let i = 0; i < text.length; i++) {
+        const variation = text.substring(0, i) + text.substring(i + 1);
+        if (variation.length > 0) {
+            variations.add(variation);
+        }
+    }
+    
+    // Generate variations with extra characters
+    const commonChars = 'аеиоуыэюяabcdefghijklmnopqrstuvwxyz';
+    for (let i = 0; i <= text.length; i++) {
+        for (const char of commonChars) {
+            const variation = text.substring(0, i) + char + text.substring(i);
+            variations.add(variation);
+        }
+    }
+    
+    return Array.from(variations);
+}
+
+// Helper function for transliteration
+function transliterate(text) {
+    const translitMap = {
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh', 'з': 'z',
+        'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r',
+        'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+        'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+        'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo', 'Ж': 'Zh', 'З': 'Z',
+        'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R',
+        'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'H', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch',
+        'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
+    };
+    
+    let result = text;
+    for (const [ru, en] of Object.entries(translitMap)) {
+        result = result.replace(new RegExp(ru, 'g'), en);
+    }
+    return result;
+}
+
+// Helper function to reverse transliteration
+function reverseTransliterate(text) {
+    const reverseTranslitMap = {
+        'a': 'а', 'b': 'б', 'v': 'в', 'g': 'г', 'd': 'д', 'e': 'е', 'yo': 'ё', 'zh': 'ж', 'z': 'з',
+        'i': 'и', 'y': 'й', 'k': 'к', 'l': 'л', 'm': 'м', 'n': 'н', 'o': 'о', 'p': 'п', 'r': 'р',
+        's': 'с', 't': 'т', 'u': 'у', 'f': 'ф', 'h': 'х', 'ts': 'ц', 'ch': 'ч', 'sh': 'ш', 'sch': 'щ',
+        'yu': 'ю', 'ya': 'я'
+    };
+    
+    let result = text.toLowerCase();
+    
+    // Sort by length to handle multi-character transliterations first
+    const sortedKeys = Object.keys(reverseTranslitMap).sort((a, b) => b.length - a.length);
+    
+    for (const key of sortedKeys) {
+        result = result.replace(new RegExp(key, 'g'), reverseTranslitMap[key]);
+    }
+    
+    return result;
+}
+
 app.get('/api/channels/search', (req, res) => {
     const { q } = req.query;
     
@@ -380,25 +549,72 @@ app.get('/api/channels/search', (req, res) => {
         return;
     }
     
-    const searchTerm = `%${q.trim()}%`;
+    const originalQuery = q.trim();
+    
+    // Generate enhanced search variations
+    const searchVariations = generateSearchVariations(originalQuery);
+    
+    // Limit variations to prevent too many parameters (max 50)
+    const limitedVariations = searchVariations.slice(0, 50);
+    
+    // Create search terms for SQL LIKE
+    const searchTerms = limitedVariations.map(term => `%${term}%`);
+    
+    // Create LIKE conditions for each search term
+    const titleConditions = searchTerms.map(() => 'LOWER(c.title) LIKE LOWER(?)').join(' OR ');
+    const descriptionConditions = searchTerms.map(() => 'LOWER(c.description) LIKE LOWER(?)').join(' OR ');
+    const tagConditions = searchTerms.map(() => 'LOWER(t.name) LIKE LOWER(?)').join(' OR ');
+    
     const query = `
-        SELECT 
+        SELECT DISTINCT
             c.id,
             c.title,
             c.description,
             c.link,
             c.created_at,
             COALESCE(AVG(r.rating), 5) as avg_rating,
-            COUNT(r.id) as review_count
+            COUNT(r.id) as review_count,
+            GROUP_CONCAT(DISTINCT t.name) as tags,
+            -- Calculate relevance score
+            (
+                CASE WHEN LOWER(c.title) LIKE LOWER(?) THEN 10 ELSE 0 END +
+                CASE WHEN LOWER(c.description) LIKE LOWER(?) THEN 5 ELSE 0 END +
+                CASE WHEN LOWER(t.name) LIKE LOWER(?) THEN 3 ELSE 0 END +
+                -- Bonus for exact matches
+                CASE WHEN LOWER(c.title) = LOWER(?) THEN 20 ELSE 0 END +
+                CASE WHEN LOWER(t.name) = LOWER(?) THEN 15 ELSE 0 END
+            ) as relevance_score
         FROM channels c
         LEFT JOIN reviews r ON c.id = r.channel_id AND r.status = 'approved'
+        LEFT JOIN channel_tags ct ON c.id = ct.channel_id
+        LEFT JOIN tags t ON ct.tag_id = t.id
         WHERE c.status = 'approved' 
-        AND (c.title LIKE ? OR c.description LIKE ?)
+        AND (
+            (${titleConditions}) OR 
+            (${descriptionConditions}) OR
+            (${tagConditions})
+        )
         GROUP BY c.id
-        ORDER BY c.created_at DESC
+        ORDER BY 
+            relevance_score DESC,
+            avg_rating DESC,
+            review_count DESC,
+            c.created_at DESC
     `;
     
-    db.all(query, [searchTerm, searchTerm], (err, rows) => {
+    // Flatten search terms for the query (3 times for title, description, tags)
+    const queryParams = [
+        ...searchTerms, // for title conditions
+        ...searchTerms, // for description conditions  
+        ...searchTerms, // for tag conditions
+        `%${originalQuery}%`, // for title priority
+        `%${originalQuery}%`, // for description priority
+        `%${originalQuery}%`, // for tags priority
+        originalQuery, // for exact title match
+        originalQuery  // for exact tag match
+    ];
+    
+    db.all(query, queryParams, (err, rows) => {
         if (err) {
             console.error('Error searching channels:', err);
             res.status(500).json({ error: 'Database error' });
@@ -408,7 +624,231 @@ app.get('/api/channels/search', (req, res) => {
         const channels = rows.map(row => ({
             ...row,
             avg_rating: Math.round(row.avg_rating * 10) / 10,
-            stars: generateStars(row.avg_rating)
+            stars: generateStars(row.avg_rating),
+            tags: row.tags ? row.tags.split(',') : []
+        }));
+        
+        res.json(channels);
+    });
+});
+
+// Search by tags
+app.get('/api/tags/search', (req, res) => {
+    const { q } = req.query;
+    
+    if (!q || q.trim() === '') {
+        res.json([]);
+        return;
+    }
+    
+    const originalQuery = q.trim();
+    
+    // Generate enhanced search variations
+    const searchVariations = generateSearchVariations(originalQuery);
+    
+    // Limit variations to prevent too many parameters (max 30 for tags)
+    const limitedVariations = searchVariations.slice(0, 30);
+    
+    // Create search terms for SQL LIKE
+    const searchTerms = limitedVariations.map(term => `%${term}%`);
+    
+    // Create LIKE conditions for each search term
+    const tagConditions = searchTerms.map(() => 'LOWER(t.name) LIKE LOWER(?)').join(' OR ');
+    
+    const query = `
+        SELECT DISTINCT
+            t.id,
+            t.name,
+            COUNT(ct.channel_id) as channel_count,
+            -- Calculate relevance score
+            (
+                CASE WHEN LOWER(t.name) LIKE LOWER(?) THEN 10 ELSE 0 END +
+                CASE WHEN LOWER(t.name) = LOWER(?) THEN 20 ELSE 0 END
+            ) as relevance_score
+        FROM tags t
+        LEFT JOIN channel_tags ct ON t.id = ct.tag_id
+        LEFT JOIN channels c ON ct.channel_id = c.id AND c.status = 'approved'
+        WHERE (${tagConditions})
+        GROUP BY t.id, t.name
+        ORDER BY 
+            relevance_score DESC,
+            channel_count DESC,
+            t.name ASC
+    `;
+    
+    const queryParams = [
+        ...searchTerms, // for tag conditions
+        `%${originalQuery}%`, // for tag priority
+        originalQuery // for exact tag match
+    ];
+    
+    db.all(query, queryParams, (err, rows) => {
+        if (err) {
+            console.error('Error searching tags:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        res.json(rows);
+    });
+});
+
+// Search channels by tag name
+app.get('/api/channels/by-tag', (req, res) => {
+    const { tag } = req.query;
+    
+    if (!tag || tag.trim() === '') {
+        res.json([]);
+        return;
+    }
+    
+    const originalTag = tag.trim();
+    
+    // Generate enhanced search variations for tag
+    const searchVariations = generateSearchVariations(originalTag);
+    const limitedVariations = searchVariations.slice(0, 30);
+    const searchTerms = limitedVariations.map(term => `%${term}%`);
+    
+    const tagConditions = searchTerms.map(() => 'LOWER(t.name) LIKE LOWER(?)').join(' OR ');
+    
+    const query = `
+        SELECT DISTINCT
+            c.id,
+            c.title,
+            c.description,
+            c.link,
+            c.created_at,
+            COALESCE(AVG(r.rating), 5) as avg_rating,
+            COUNT(r.id) as review_count,
+            GROUP_CONCAT(DISTINCT t.name) as tags,
+            -- Calculate relevance score
+            (
+                CASE WHEN LOWER(t.name) LIKE LOWER(?) THEN 10 ELSE 0 END +
+                CASE WHEN LOWER(t.name) = LOWER(?) THEN 20 ELSE 0 END
+            ) as relevance_score
+        FROM channels c
+        LEFT JOIN reviews r ON c.id = r.channel_id AND r.status = 'approved'
+        LEFT JOIN channel_tags ct ON c.id = ct.channel_id
+        LEFT JOIN tags t ON ct.tag_id = t.id
+        WHERE c.status = 'approved' 
+        AND (${tagConditions})
+        GROUP BY c.id
+        ORDER BY 
+            relevance_score DESC,
+            avg_rating DESC,
+            review_count DESC,
+            c.created_at DESC
+    `;
+    
+    const queryParams = [
+        ...searchTerms, // for tag conditions
+        `%${originalTag}%`, // for tag priority
+        originalTag // for exact tag match
+    ];
+    
+    db.all(query, queryParams, (err, rows) => {
+        if (err) {
+            console.error('Error searching channels by tag:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        const channels = rows.map(row => ({
+            ...row,
+            avg_rating: Math.round(row.avg_rating * 10) / 10,
+            stars: generateStars(row.avg_rating),
+            tags: row.tags ? row.tags.split(',') : []
+        }));
+        
+        res.json(channels);
+    });
+});
+
+// Get random channel
+app.get('/api/channels/random', (req, res) => {
+    const query = `
+        SELECT 
+            c.id,
+            c.title,
+            c.description,
+            c.link,
+            c.created_at,
+            COALESCE(AVG(r.rating), 5) as avg_rating,
+            COUNT(r.id) as review_count,
+            GROUP_CONCAT(DISTINCT t.name) as tags
+        FROM channels c
+        LEFT JOIN reviews r ON c.id = r.channel_id AND r.status = 'approved'
+        LEFT JOIN channel_tags ct ON c.id = ct.channel_id
+        LEFT JOIN tags t ON ct.tag_id = t.id
+        WHERE c.status = 'approved'
+        GROUP BY c.id
+        ORDER BY RANDOM()
+        LIMIT 1
+    `;
+    
+    db.get(query, [], (err, row) => {
+        if (err) {
+            console.error('Error getting random channel:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (!row) {
+            res.status(404).json({ error: 'No channels found' });
+            return;
+        }
+        
+        const channel = {
+            ...row,
+            avg_rating: Math.round(row.avg_rating * 10) / 10,
+            stars: generateStars(row.avg_rating),
+            tags: row.tags ? row.tags.split(',') : []
+        };
+        
+        res.json(channel);
+    });
+});
+
+// Get channels by tag
+app.get('/api/tags/:tagId/channels', (req, res) => {
+    const tagId = req.params.tagId;
+    
+    const query = `
+        SELECT 
+            c.id,
+            c.title,
+            c.description,
+            c.link,
+            c.created_at,
+            COALESCE(AVG(r.rating), 5) as avg_rating,
+            COUNT(r.id) as review_count,
+            GROUP_CONCAT(DISTINCT t.name) as tags
+        FROM channels c
+        LEFT JOIN reviews r ON c.id = r.channel_id AND r.status = 'approved'
+        LEFT JOIN channel_tags ct ON c.id = ct.channel_id
+        LEFT JOIN tags t ON ct.tag_id = t.id
+        WHERE c.status = 'approved' 
+        AND c.id IN (
+            SELECT channel_id 
+            FROM channel_tags 
+            WHERE tag_id = ?
+        )
+        GROUP BY c.id
+        ORDER BY c.created_at DESC
+    `;
+    
+    db.all(query, [tagId], (err, rows) => {
+        if (err) {
+            console.error('Error getting channels by tag:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        const channels = rows.map(row => ({
+            ...row,
+            avg_rating: Math.round(row.avg_rating * 10) / 10,
+            stars: generateStars(row.avg_rating),
+            tags: row.tags ? row.tags.split(',') : []
         }));
         
         res.json(channels);
@@ -548,7 +988,7 @@ app.post('/api/channels', (req, res) => {
 // Add review
 app.post('/api/channels/:id/reviews', (req, res) => {
     const channelId = req.params.id;
-    const { text, rating } = req.body;
+    const { text, rating, is_anonymous } = req.body;
     const sessionToken = req.headers.authorization?.replace('Bearer ', '');
     
     if (!text || !rating) {
@@ -564,6 +1004,7 @@ app.post('/api/channels/:id/reviews', (req, res) => {
     // Get user info from session
     let userId = null;
     let userDisplayName = 'Анонимный пользователь';
+    let isAnonymousReview = is_anonymous || false;
     
     if (sessionToken) {
         const userQuery = `
@@ -575,9 +1016,13 @@ app.post('/api/channels/:id/reviews', (req, res) => {
         db.get(userQuery, [sessionToken], (err, user) => {
             if (!err && user) {
                 userId = user.id;
-                userDisplayName = user.first_name + (user.last_name ? ' ' + user.last_name : '');
-                if (user.username) {
-                    userDisplayName += ` (@${user.username})`;
+                if (isAnonymousReview) {
+                    userDisplayName = 'Анонимный пользователь';
+                } else {
+                    userDisplayName = user.first_name + (user.last_name ? ' ' + user.last_name : '');
+                    if (user.username) {
+                        userDisplayName += ` (@${user.username})`;
+                    }
                 }
             }
             insertReview();
@@ -587,39 +1032,38 @@ app.post('/api/channels/:id/reviews', (req, res) => {
     }
     
     function insertReview() {
-    
-    // Check if channel exists
-    const channelQuery = 'SELECT id FROM channels WHERE id = ? AND status = ?';
-    db.get(channelQuery, [channelId, 'approved'], (err, channel) => {
-        if (err) {
-            console.error('Error checking channel:', err);
-            res.status(500).json({ error: 'Database error' });
-            return;
-        }
-        
-        if (!channel) {
-            res.status(404).json({ error: 'Channel not found' });
-            return;
-        }
-        
-        const insertQuery = `
-            INSERT INTO reviews (channel_id, text, nickname, is_anonymous, rating, status, user_id)
-            VALUES (?, ?, ?, ?, ?, 'pending', ?)
-        `;
-        
-        db.run(insertQuery, [channelId, text, userDisplayName, false, rating, userId], function(err) {
+        // Check if channel exists
+        const channelQuery = 'SELECT id FROM channels WHERE id = ? AND status = ?';
+        db.get(channelQuery, [channelId, 'approved'], (err, channel) => {
             if (err) {
-                console.error('Error inserting review:', err);
+                console.error('Error checking channel:', err);
                 res.status(500).json({ error: 'Database error' });
                 return;
             }
             
-            res.json({ 
-                success: true, 
-                message: 'Отзыв добавлен и отправлен на модерацию',
-                review_id: this.lastID 
+            if (!channel) {
+                res.status(404).json({ error: 'Channel not found' });
+                return;
+            }
+            
+            const insertQuery = `
+                INSERT INTO reviews (channel_id, text, nickname, is_anonymous, rating, status, user_id)
+                VALUES (?, ?, ?, ?, ?, 'pending', ?)
+            `;
+            
+            db.run(insertQuery, [channelId, text, userDisplayName, isAnonymousReview, rating, userId], function(err) {
+                if (err) {
+                    console.error('Error inserting review:', err);
+                    res.status(500).json({ error: 'Database error' });
+                    return;
+                }
+                
+                res.json({ 
+                    success: true, 
+                    message: 'Отзыв добавлен и отправлен на модерацию',
+                    review_id: this.lastID 
+                });
             });
-        });
         });
     }
 });

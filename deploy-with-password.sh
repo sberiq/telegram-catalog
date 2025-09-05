@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Deploy script for VDS/VPS with GitHub integration
-# Usage: ./deploy.sh
+# Deploy script with password authentication
+# Usage: ./deploy-with-password.sh
 
-echo "🚀 Starting deployment..."
+echo "🚀 Starting deployment with password authentication..."
 
 # Colors for output
 RED='\033[0;31m'
@@ -12,44 +12,57 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration - ОБЯЗАТЕЛЬНО ИЗМЕНИТЕ НА ВАШИ ДАННЫЕ!
+# Configuration
 SERVER_USER="root"
 SERVER_HOST="144.31.165.36"
 SERVER_PATH="/var/www/telegram-catalog"
 GIT_REPO="https://github.com/sberiq/telegram-catalog.git"
-DOMAIN="superpuperkrutoi.ru"  # Ваш домен
-
-# Проверка конфигурации
-if [ "$SERVER_HOST" = "your-server-ip" ]; then
-    echo -e "${RED}❌ Ошибка: Не настроен SERVER_HOST в deploy.sh${NC}"
-    echo -e "${YELLOW}📝 Отредактируйте файл deploy.sh и укажите IP вашего сервера${NC}"
-    exit 1
-fi
+DOMAIN="superpuperkrutoi.ru"
+PASSWORD="HTZhvgJPd55L"
 
 echo -e "${BLUE}🔧 Configuration:${NC}"
 echo -e "   Server: $SERVER_USER@$SERVER_HOST"
 echo -e "   Path: $SERVER_PATH"
 echo -e "   Repo: $GIT_REPO"
+echo -e "   Domain: $DOMAIN"
 echo ""
+
+# Function to run commands on server
+run_on_server() {
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST "$1"
+}
+
+# Check if sshpass is available, if not install it
+if ! command -v sshpass &> /dev/null; then
+    echo -e "${YELLOW}📦 Installing sshpass...${NC}"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        if command -v brew &> /dev/null; then
+            brew install hudochenkov/sshpass/sshpass
+        else
+            echo -e "${RED}❌ Please install Homebrew first: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"${NC}"
+            exit 1
+        fi
+    else
+        # Linux
+        sudo apt-get update && sudo apt-get install -y sshpass
+    fi
+fi
 
 # Проверка подключения к серверу
 echo -e "${YELLOW}🔍 Checking server connection...${NC}"
-if ! ssh -o ConnectTimeout=10 $SERVER_USER@$SERVER_HOST "echo 'Connection OK'" 2>/dev/null; then
+if ! run_on_server "echo 'Connection OK'"; then
     echo -e "${RED}❌ Не удается подключиться к серверу $SERVER_HOST${NC}"
-    echo -e "${YELLOW}💡 Проверьте:${NC}"
-    echo -e "   1. IP адрес сервера"
-    echo -e "   2. SSH ключи настроены"
-    echo -e "   3. Сервер запущен"
     exit 1
 fi
 
 # Создание директории на сервере если не существует
 echo -e "${YELLOW}📁 Creating server directory...${NC}"
-ssh $SERVER_USER@$SERVER_HOST "mkdir -p $SERVER_PATH"
+run_on_server "mkdir -p $SERVER_PATH"
 
 # Клонирование/обновление репозитория на сервере
 echo -e "${YELLOW}📦 Setting up repository on server...${NC}"
-ssh $SERVER_USER@$SERVER_HOST "
+run_on_server "
     if [ -d '$SERVER_PATH/.git' ]; then
         echo 'Updating existing repository...'
         cd $SERVER_PATH && git pull origin main
@@ -61,15 +74,15 @@ ssh $SERVER_USER@$SERVER_HOST "
 
 # Установка зависимостей
 echo -e "${YELLOW}🔧 Installing dependencies...${NC}"
-ssh $SERVER_USER@$SERVER_HOST "cd $SERVER_PATH && npm install --production"
+run_on_server "cd $SERVER_PATH && npm install --production"
 
 # Создание директории для логов
 echo -e "${YELLOW}📝 Creating logs directory...${NC}"
-ssh $SERVER_USER@$SERVER_HOST "mkdir -p $SERVER_PATH/logs"
+run_on_server "mkdir -p $SERVER_PATH/logs"
 
 # Запуск/перезапуск приложения
 echo -e "${YELLOW}🔄 Starting application...${NC}"
-ssh $SERVER_USER@$SERVER_HOST "
+run_on_server "
     cd $SERVER_PATH
     if pm2 list | grep -q telegram-catalog; then
         echo 'Restarting existing application...'
@@ -83,7 +96,7 @@ ssh $SERVER_USER@$SERVER_HOST "
 
 # Настройка Nginx
 echo -e "${YELLOW}🌐 Configuring Nginx...${NC}"
-ssh $SERVER_USER@$SERVER_HOST "
+run_on_server "
     # Создаем конфигурацию Nginx
     sudo tee /etc/nginx/sites-available/telegram-catalog > /dev/null <<EOF
 server {
@@ -120,14 +133,14 @@ EOF
 
 # Проверка статуса
 echo -e "${YELLOW}📊 Checking application status...${NC}"
-ssh $SERVER_USER@$SERVER_HOST "pm2 status telegram-catalog"
+run_on_server "pm2 status telegram-catalog"
 
 echo ""
 echo -e "${GREEN}✅ Deployment completed successfully!${NC}"
 echo -e "${GREEN}🌐 Your site is now live at: http://$SERVER_HOST${NC}"
 echo -e "${GREEN}🌐 Domain configured: http://$DOMAIN${NC}"
 echo -e "${BLUE}📋 Useful commands:${NC}"
-echo -e "   View logs: ssh $SERVER_USER@$SERVER_HOST 'pm2 logs telegram-catalog'"
-echo -e "   Restart: ssh $SERVER_USER@$SERVER_HOST 'pm2 restart telegram-catalog'"
-echo -e "   Status: ssh $SERVER_USER@$SERVER_HOST 'pm2 status'"
-echo -e "   Setup SSL: ssh $SERVER_USER@$SERVER_HOST 'sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN'"
+echo -e "   View logs: sshpass -p '$PASSWORD' ssh $SERVER_USER@$SERVER_HOST 'pm2 logs telegram-catalog'"
+echo -e "   Restart: sshpass -p '$PASSWORD' ssh $SERVER_USER@$SERVER_HOST 'pm2 restart telegram-catalog'"
+echo -e "   Status: sshpass -p '$PASSWORD' ssh $SERVER_USER@$SERVER_HOST 'pm2 status'"
+echo -e "   Setup SSL: sshpass -p '$PASSWORD' ssh $SERVER_USER@$SERVER_HOST 'sudo certbot --nginx -d $DOMAIN -d www.$DOMAIN'"
