@@ -158,6 +158,15 @@ function initializeDatabase() {
         }
     });
 
+    // Add telegram_user_id column to admins table if it doesn't exist
+    db.run(`
+        ALTER TABLE admins ADD COLUMN telegram_user_id INTEGER
+    `, (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Error adding telegram_user_id to admins:', err);
+        }
+    });
+
     // Create main admin if not exists
     db.run(`
         INSERT OR IGNORE INTO admins (username, password) 
@@ -1125,10 +1134,12 @@ app.get('/api/user/me', (req, res) => {
     }
     
     const query = `
-        SELECT u.*, us.session_token, up.nickname, up.bio, up.avatar_url, up.is_verified
+        SELECT u.*, us.session_token, up.nickname, up.bio, up.avatar_url, up.is_verified,
+               a.id as admin_id, a.username as admin_username
         FROM users u
         JOIN user_sessions us ON u.id = us.user_id
         LEFT JOIN user_profiles up ON u.id = up.user_id
+        LEFT JOIN admins a ON u.telegram_id = a.telegram_user_id
         WHERE us.session_token = ?
         ORDER BY us.created_at DESC
         LIMIT 1
@@ -1156,7 +1167,9 @@ app.get('/api/user/me', (req, res) => {
             nickname: user.nickname,
             bio: user.bio,
             avatar_url: user.avatar_url,
-            is_verified: user.is_verified || false
+            is_verified: user.is_verified || false,
+            is_admin: !!user.admin_id,
+            admin_username: user.admin_username
         });
     });
 });
@@ -1168,11 +1181,13 @@ app.get('/api/user/:userId/profile', (req, res) => {
     const query = `
         SELECT u.*, up.nickname, up.bio, up.avatar_url, up.is_verified, up.verified_at,
                COUNT(DISTINCT r.id) as reviews_count,
-               COUNT(DISTINCT fc.channel_id) as favorite_channels_count
+               COUNT(DISTINCT fc.channel_id) as favorite_channels_count,
+               a.id as admin_id, a.username as admin_username
         FROM users u
         LEFT JOIN user_profiles up ON u.id = up.user_id
         LEFT JOIN reviews r ON u.id = r.user_id AND r.status = 'approved'
         LEFT JOIN user_favorite_channels fc ON u.id = fc.user_id
+        LEFT JOIN admins a ON u.telegram_id = a.telegram_user_id
         WHERE u.telegram_id = ?
         GROUP BY u.id
     `;
@@ -1201,7 +1216,9 @@ app.get('/api/user/:userId/profile', (req, res) => {
             verified_at: user.verified_at,
             reviews_count: user.reviews_count || 0,
             favorite_channels_count: user.favorite_channels_count || 0,
-            created_at: user.created_at
+            created_at: user.created_at,
+            is_admin: !!user.admin_id,
+            admin_username: user.admin_username
         });
     });
 });
@@ -1483,6 +1500,53 @@ app.get('/api/channels/:channelId/admins', (req, res) => {
     });
 });
 
+// Link admin with user
+app.post('/api/admin/link-user', (req, res) => {
+    const { adminId, telegramUserId } = req.body;
+    
+    if (!adminId || !telegramUserId) {
+        res.status(400).json({ error: 'Admin ID and Telegram User ID required' });
+        return;
+    }
+    
+    const query = 'UPDATE admins SET telegram_user_id = ? WHERE id = ?';
+    db.run(query, [telegramUserId, adminId], function(err) {
+        if (err) {
+            console.error('Error linking admin with user:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (this.changes === 0) {
+            res.status(404).json({ error: 'Admin not found' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'Admin linked with user successfully' });
+    });
+});
+
+// Unlink admin from user
+app.post('/api/admin/unlink-user', (req, res) => {
+    const { adminId } = req.body;
+    
+    if (!adminId) {
+        res.status(400).json({ error: 'Admin ID required' });
+        return;
+    }
+    
+    const query = 'UPDATE admins SET telegram_user_id = NULL WHERE id = ?';
+    db.run(query, [adminId], function(err) {
+        if (err) {
+            console.error('Error unlinking admin from user:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'Admin unlinked from user successfully' });
+    });
+});
+
 // Admin login
 app.post('/api/admin/login', (req, res) => {
     const { username, password } = req.body;
@@ -1495,7 +1559,15 @@ app.post('/api/admin/login', (req, res) => {
     // Encode password to Base64 for comparison
     const encodedPassword = Buffer.from(password).toString('base64');
     
-    const query = 'SELECT * FROM admins WHERE username = ? AND password = ?';
+    const query = `
+        SELECT a.*, u.telegram_id, u.username as user_username, u.first_name, u.last_name,
+               up.nickname, up.avatar_url, up.is_verified
+        FROM admins a
+        LEFT JOIN users u ON a.telegram_user_id = u.telegram_id
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        WHERE a.username = ? AND a.password = ?
+    `;
+    
     db.get(query, [username, encodedPassword], (err, admin) => {
         if (err) {
             console.error('Error checking admin credentials:', err);
@@ -1508,7 +1580,24 @@ app.post('/api/admin/login', (req, res) => {
             return;
         }
         
-        res.json({ success: true, message: 'Login successful' });
+        res.json({ 
+            success: true, 
+            message: 'Login successful',
+            admin: {
+                id: admin.id,
+                username: admin.username,
+                telegram_user_id: admin.telegram_id,
+                user_info: admin.telegram_id ? {
+                    id: admin.telegram_id,
+                    username: admin.user_username,
+                    first_name: admin.first_name,
+                    last_name: admin.last_name,
+                    nickname: admin.nickname,
+                    avatar_url: admin.avatar_url,
+                    is_verified: admin.is_verified
+                } : null
+            }
+        });
     });
 });
 

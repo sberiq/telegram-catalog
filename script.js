@@ -8,6 +8,7 @@ let selectedTags = [];
 let currentAdminTab = 'channels';
 let currentUser = null;
 let sessionToken = null;
+let currentAdmin = null;
 
 // Telegram WebApp Integration
 // Telegram Widget Authentication
@@ -98,7 +99,10 @@ function updateAuthUI() {
         userStatus.classList.remove('hidden');
         
         // Update user info
-        const displayName = currentUser.nickname || currentUser.first_name + (currentUser.last_name ? ' ' + currentUser.last_name : '');
+        let displayName = currentUser.nickname || currentUser.first_name + (currentUser.last_name ? ' ' + currentUser.last_name : '');
+        if (currentUser.is_admin) {
+            displayName = '👑 ' + displayName;
+        }
         userName.textContent = displayName;
         
         // Update avatar
@@ -875,6 +879,7 @@ async function handleAdminLogin(e) {
         
         if (response.ok) {
             isAdminLoggedIn = true;
+            currentAdmin = result.admin; // Store admin info
             // Hide login form and show dashboard ONLY after successful login
             document.getElementById('adminLoginForm').style.display = 'none';
             document.getElementById('adminDashboard').style.display = 'block';
@@ -1705,7 +1710,11 @@ async function loadProfileData() {
         const favorites = await favoritesResponse.json();
         
         // Update profile info
-        document.getElementById('profileName').textContent = profile.nickname || profile.first_name + (profile.last_name ? ' ' + profile.last_name : '');
+        let profileName = profile.nickname || profile.first_name + (profile.last_name ? ' ' + profile.last_name : '');
+        if (profile.is_admin) {
+            profileName = '👑 ' + profileName;
+        }
+        document.getElementById('profileName').textContent = profileName;
         document.getElementById('profileUsername').textContent = profile.username ? `@${profile.username}` : 'Без username';
         document.getElementById('profileId').textContent = `ID: ${profile.id}`;
         document.getElementById('profileBio').value = profile.bio || '';
@@ -1864,4 +1873,70 @@ function showUserProfile(userId) {
     // This would open a read-only profile view
     // For now, just show a message
     showInfo(`Просмотр профиля пользователя ${userId} будет добавлен позже`);
+}
+
+// Admin Functions
+async function linkAdminWithUser(telegramUserId) {
+    if (!currentAdmin) {
+        showError('Необходимо войти в админ-панель');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/admin/link-user', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                adminId: currentAdmin.id,
+                telegramUserId: telegramUserId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showSuccess('Админ успешно связан с пользователем');
+            // Update current admin info
+            currentAdmin.telegram_user_id = telegramUserId;
+        } else {
+            showError(result.error || 'Ошибка связывания админа с пользователем');
+        }
+    } catch (error) {
+        console.error('Error linking admin with user:', error);
+        showError('Ошибка связывания админа с пользователем');
+    }
+}
+
+async function unlinkAdminFromUser() {
+    if (!currentAdmin) {
+        showError('Необходимо войти в админ-панель');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/admin/unlink-user', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                adminId: currentAdmin.id
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showSuccess('Админ отвязан от пользователя');
+            // Update current admin info
+            currentAdmin.telegram_user_id = null;
+        } else {
+            showError(result.error || 'Ошибка отвязывания админа от пользователя');
+        }
+    } catch (error) {
+        console.error('Error unlinking admin from user:', error);
+        showError('Ошибка отвязывания админа от пользователя');
+    }
 }
