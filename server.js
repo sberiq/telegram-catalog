@@ -1560,26 +1560,9 @@ app.post('/api/admin/unlink-user', (req, res) => {
     });
 });
 
-// Debug: Get all admins
-app.get('/api/admin/debug', (req, res) => {
-    const query = 'SELECT * FROM admins';
-    db.all(query, [], (err, admins) => {
-        if (err) {
-            console.error('Error getting admins:', err);
-            res.status(500).json({ error: 'Database error' });
-            return;
-        }
-        
-        console.log('All admins in database:', admins);
-        res.json({ admins });
-    });
-});
-
 // Admin login
 app.post('/api/admin/login', (req, res) => {
     const { username, password } = req.body;
-    
-    console.log('Admin login attempt:', { username, password });
     
     if (!username || !password) {
         res.status(400).json({ error: 'Missing credentials' });
@@ -1588,7 +1571,6 @@ app.post('/api/admin/login', (req, res) => {
     
     // Encode password to Base64 for comparison
     const encodedPassword = Buffer.from(password).toString('base64');
-    console.log('Encoded password:', encodedPassword);
     
     const query = `
         SELECT a.*, u.telegram_id, u.username as user_username, u.first_name, u.last_name,
@@ -1606,10 +1588,7 @@ app.post('/api/admin/login', (req, res) => {
             return;
         }
         
-        console.log('Admin query result:', admin);
-        
         if (!admin) {
-            console.log('No admin found with these credentials');
             res.status(401).json({ error: 'Invalid credentials' });
             return;
         }
