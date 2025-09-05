@@ -315,13 +315,13 @@ function displayMainSearchResults(channels, tags, query) {
                     </h4>
                     <div class="channels-results">
                         ${channels.map(channel => `
-                            <div class="result-card">
+            <div class="result-card">
                                 <div class="channel-header">
-                                    <div class="channel-name">${escapeHtml(channel.title)}</div>
+                <div class="channel-name">${escapeHtml(channel.title)}</div>
                                     <div class="channel-rating">
-                                        <div class="stars">${channel.stars}</div>
+                    <div class="stars">${channel.stars}</div>
                                         <span class="rating-value">${channel.avg_rating}/5</span>
-                                    </div>
+                </div>
                                 </div>
                                 <div class="channel-description">${escapeHtml(channel.description)}</div>
                                 ${channel.tags && channel.tags.length > 0 ? `
@@ -329,10 +329,10 @@ function displayMainSearchResults(channels, tags, query) {
                                         ${channel.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
                                     </div>
                                 ` : ''}
-                                <button class="details-button" onclick="showChannelDetails(${channel.id})">
-                                    Подробнее
-                                </button>
-                            </div>
+                <button class="details-button" onclick="showChannelDetails(${channel.id})">
+                    Подробнее
+                </button>
+            </div>
                         `).join('')}
                     </div>
                 </div>
@@ -1506,37 +1506,74 @@ async function deleteAdmin(adminId) {
 // Admin Users Functions
 async function loadAdminUsers() {
     try {
-        const response = await fetch('/api/admin/users');
-        const users = await response.json();
-        displayAdminUsers(users);
+        const response = await fetch('/api/admin/users?page=1&limit=50');
+        const data = await response.json();
+        displayAdminUsers(data.users, data.pagination);
     } catch (error) {
         console.error('Error loading users:', error);
         showError('Ошибка загрузки пользователей');
     }
 }
 
-function displayAdminUsers(users) {
+function displayAdminUsers(users, pagination) {
     const content = document.getElementById('adminContent');
     
     content.innerHTML = `
         <div class="admin-stats-header">
-            <h3>Всего пользователей: ${users.length}</h3>
+            <h3>Пользователи (${pagination.total} всего)</h3>
+            <div class="pagination-info">
+                Страница ${pagination.page} из ${pagination.pages}
+            </div>
         </div>
         ${users.map(user => `
             <div class="admin-item">
+                <div class="admin-item-avatar">
+                    <img src="${user.avatar_url || `https://t.me/i/userpic/320/${user.telegram_id}.jpg`}" 
+                         alt="Avatar" class="user-avatar-small" 
+                         onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNFNUU3RUIiLz4KPHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI4IiB5PSI4Ij4KPHBhdGggZD0iTTIwIDIxdi0yYTQgNCAwIDAgMC00LTRIOGE0IDQgMCAwIDAtNCA0djIiIHN0cm9rZT0iIzlDQTNBRiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPGNpcmNsZSBjeD0iMTIiIGN5PSI3IiByPSI0IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo8L3N2Zz4K'">
+                </div>
                 <div class="admin-item-info">
                     <div class="admin-item-title">
                         ${user.first_name || ''} ${user.last_name || ''} 
                         ${user.username ? `(@${user.username})` : ''}
+                        ${user.is_verified ? '<span class="verified-badge">✓</span>' : ''}
+                        ${user.is_admin ? '<span class="admin-badge">👑</span>' : ''}
                     </div>
                     <div class="admin-item-details">ID: ${user.telegram_id}</div>
                     <div class="admin-item-details">Язык: ${user.language_code || 'Не указан'}</div>
                     <div class="admin-item-details">Premium: ${user.is_premium ? 'Да' : 'Нет'}</div>
-                    <div class="admin-item-details">Каналов: ${user.channels_count || 0}</div>
+                    <div class="admin-item-details">Устройство: ${user.device_type || 'Неизвестно'}</div>
+                    <div class="admin-item-details">Браузер: ${user.browser || 'Неизвестно'}</div>
+                    <div class="admin-item-details">ОС: ${user.os || 'Неизвестно'}</div>
+                    <div class="admin-item-details">Сессий: ${user.total_sessions || 0}</div>
+                    <div class="admin-item-details">Запросов: ${user.total_requests || 0}</div>
                     <div class="admin-item-details">Отзывов: ${user.reviews_count || 0}</div>
-                    <div class="admin-item-details">Тегов: ${user.tags_count || 0}</div>
+                    <div class="admin-item-details">Избранных: ${user.favorites_count || 0}</div>
                     <div class="admin-item-details">Регистрация: ${formatDate(user.created_at)}</div>
                     <div class="admin-item-details">Последний визит: ${formatDate(user.last_seen)}</div>
+                    <div class="admin-item-details">Последняя активность: ${formatDate(user.last_activity)}</div>
+                </div>
+                <div class="admin-item-actions">
+                    <button class="admin-action-btn view" onclick="viewUserDetails(${user.telegram_id})" title="Подробнее">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                    ${!user.is_verified ? `
+                        <button class="admin-action-btn verify" onclick="verifyUser(${user.telegram_id})" title="Верифицировать">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20,6 9,17 4,12"></polyline>
+                            </svg>
+                        </button>
+                    ` : `
+                        <button class="admin-action-btn unverify" onclick="unverifyUser(${user.telegram_id})" title="Снять верификацию">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    `}
                 </div>
             </div>
         `).join('')}
@@ -1565,51 +1602,31 @@ function displayAdminStatistics(stats) {
         
         <div class="stats-grid">
             <div class="stat-card">
-                <h4>Пользователи</h4>
-                <div class="stat-number">${stats.totals.total_users}</div>
+                <h4>Всего пользователей</h4>
+                <div class="stat-number">${stats.overview.total_users}</div>
             </div>
             <div class="stat-card">
-                <h4>Каналы</h4>
-                <div class="stat-number">${stats.totals.total_channels}</div>
+                <h4>Новых сегодня</h4>
+                <div class="stat-number">${stats.overview.new_users_today}</div>
             </div>
             <div class="stat-card">
-                <h4>Отзывы</h4>
-                <div class="stat-number">${stats.totals.total_reviews}</div>
+                <h4>Активных (7 дней)</h4>
+                <div class="stat-number">${stats.overview.active_users}</div>
             </div>
             <div class="stat-card">
-                <h4>Теги</h4>
-                <div class="stat-number">${stats.totals.total_tags}</div>
+                <h4>Premium</h4>
+                <div class="stat-number">${stats.overview.premium_users}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Верифицированных</h4>
+                <div class="stat-number">${stats.overview.verified_users}</div>
             </div>
         </div>
         
         <div class="stats-section">
-            <h4>Топ стран</h4>
+            <h4>Устройства</h4>
             <div class="stats-list">
-                ${stats.topCountries.map(country => `
-                    <div class="stat-item">
-                        <span>${country.country || 'Неизвестно'}</span>
-                        <span>${country.count}</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-        
-        <div class="stats-section">
-            <h4>Топ браузеров</h4>
-            <div class="stats-list">
-                ${stats.topBrowsers.map(browser => `
-                    <div class="stat-item">
-                        <span>${browser.browser || 'Неизвестно'}</span>
-                        <span>${browser.count}</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-        
-        <div class="stats-section">
-            <h4>Топ устройств</h4>
-            <div class="stats-list">
-                ${stats.topDevices.map(device => `
+                ${stats.device_statistics.map(device => `
                     <div class="stat-item">
                         <span>${device.device_type || 'Неизвестно'}</span>
                         <span>${device.count}</span>
@@ -1619,17 +1636,148 @@ function displayAdminStatistics(stats) {
         </div>
         
         <div class="stats-section">
-            <h4>Регистрации за последние 30 дней</h4>
+            <h4>Браузеры</h4>
             <div class="stats-list">
-                ${stats.dailyRegistrations.map(day => `
+                ${stats.browser_statistics.map(browser => `
                     <div class="stat-item">
-                        <span>${formatDate(day.date)}</span>
-                        <span>${day.count}</span>
+                        <span>${browser.browser || 'Неизвестно'}</span>
+                        <span>${browser.count}</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+        
+        <div class="stats-section">
+            <h4>Операционные системы</h4>
+            <div class="stats-list">
+                ${stats.os_statistics.map(os => `
+                    <div class="stat-item">
+                        <span>${os.os || 'Неизвестно'}</span>
+                        <span>${os.count}</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+        
+        <div class="stats-section">
+            <h4>Языки</h4>
+            <div class="stats-list">
+                ${stats.language_statistics.map(lang => `
+                    <div class="stat-item">
+                        <span>${lang.language_code || 'Неизвестно'}</span>
+                        <span>${lang.count}</span>
                     </div>
                 `).join('')}
             </div>
         </div>
     `;
+}
+
+// Admin user management functions
+async function viewUserDetails(userId) {
+    try {
+        const response = await fetch(`/api/admin/users/${userId}`);
+        const user = await response.json();
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Детали пользователя</h3>
+                    <button class="close-btn" onclick="this.closest('.modal').remove()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="user-details">
+                        <div class="user-avatar-large">
+                            <img src="${user.avatar_url || `https://t.me/i/userpic/320/${user.telegram_id}.jpg`}" 
+                                 alt="Avatar" class="user-avatar-large-img"
+                                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iNDAiIGN5PSI0MCIgcj0iNDAiIGZpbGw9IiNFNUU3RUIiLz4KPHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSIxNiIgeT0iMTYiPgo8cGF0aCBkPSJNMjQgMzJ2LTJhNCA0IDAgMCAwLTQtNEg4YTQgNCAwIDAgMC00IDR2MiIgc3Ryb2tlPSIjOUNBM0FGIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8Y2lyY2xlIGN4PSIxMiIgY3k9IjEwIiByPSI0IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo8L3N2Zz4K'">
+                        </div>
+                        <div class="user-info">
+                            <h4>${user.first_name || ''} ${user.last_name || ''} 
+                                ${user.username ? `(@${user.username})` : ''}
+                                ${user.is_verified ? '<span class="verified-badge">✓</span>' : ''}
+                                ${user.is_admin ? '<span class="admin-badge">👑</span>' : ''}
+                            </h4>
+                            <p><strong>ID:</strong> ${user.telegram_id}</p>
+                            <p><strong>Язык:</strong> ${user.language_code || 'Не указан'}</p>
+                            <p><strong>Premium:</strong> ${user.is_premium ? 'Да' : 'Нет'}</p>
+                            <p><strong>Устройство:</strong> ${user.device_type || 'Неизвестно'}</p>
+                            <p><strong>Браузер:</strong> ${user.browser || 'Неизвестно'}</p>
+                            <p><strong>ОС:</strong> ${user.os || 'Неизвестно'}</p>
+                            <p><strong>IP:</strong> ${user.ip_address || 'Неизвестно'}</p>
+                            <p><strong>Сессий:</strong> ${user.total_sessions || 0}</p>
+                            <p><strong>Запросов:</strong> ${user.total_requests || 0}</p>
+                            <p><strong>Отзывов:</strong> ${user.reviews_count || 0}</p>
+                            <p><strong>Избранных:</strong> ${user.favorite_channels_count || 0}</p>
+                            <p><strong>Регистрация:</strong> ${formatDate(user.created_at)}</p>
+                            <p><strong>Последний визит:</strong> ${formatDate(user.last_seen)}</p>
+                            <p><strong>Последняя активность:</strong> ${formatDate(user.last_activity)}</p>
+                        </div>
+                    </div>
+                    ${user.recent_sessions && user.recent_sessions.length > 0 ? `
+                        <div class="user-sessions">
+                            <h4>Последние сессии</h4>
+                            ${user.recent_sessions.map(session => `
+                                <div class="session-item">
+                                    <p><strong>IP:</strong> ${session.ip_address}</p>
+                                    <p><strong>User Agent:</strong> ${session.user_agent}</p>
+                                    <p><strong>Создана:</strong> ${formatDate(session.created_at)}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } catch (error) {
+        console.error('Error loading user details:', error);
+        showError('Ошибка загрузки деталей пользователя');
+    }
+}
+
+async function verifyUser(userId) {
+    try {
+        const response = await fetch(`/api/admin/users/${userId}/verify`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            showSuccess('Пользователь верифицирован');
+            loadAdminUsers(); // Reload users list
+        } else {
+            showError('Ошибка верификации пользователя');
+        }
+    } catch (error) {
+        console.error('Error verifying user:', error);
+        showError('Ошибка верификации пользователя');
+    }
+}
+
+async function unverifyUser(userId) {
+    try {
+        const response = await fetch(`/api/admin/users/${userId}/unverify`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            showSuccess('Верификация пользователя снята');
+            loadAdminUsers(); // Reload users list
+        } else {
+            showError('Ошибка снятия верификации');
+        }
+    } catch (error) {
+        console.error('Error unverifying user:', error);
+        showError('Ошибка снятия верификации');
+    }
 }
 
 // Initialize app

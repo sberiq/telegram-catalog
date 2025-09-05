@@ -208,7 +208,7 @@ function initializeDatabase() {
     const userColumns = [
         'is_bot', 'can_join_groups', 'can_read_all_group_messages', 'supports_inline_queries',
         'last_activity', 'total_sessions', 'total_requests', 'user_agent', 'ip_address',
-        'country', 'city', 'timezone', 'device_type', 'browser', 'os'
+        'country', 'city', 'timezone', 'device_type', 'browser', 'os', 'avatar_url'
     ];
     
     userColumns.forEach(column => {
@@ -419,12 +419,15 @@ app.post('/api/telegram/widget-auth', (req, res) => {
             (telegram_id, username, first_name, last_name, language_code, is_premium, 
              is_bot, can_join_groups, can_read_all_group_messages, supports_inline_queries,
              last_seen, last_activity, total_sessions, total_requests, user_agent, 
-             ip_address, device_type, browser, os)
+             ip_address, device_type, browser, os, avatar_url)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 
                     COALESCE((SELECT total_sessions + 1 FROM users WHERE telegram_id = ?), 1),
                     COALESCE((SELECT total_requests FROM users WHERE telegram_id = ?), 0),
-                    ?, ?, ?, ?, ?)
+                    ?, ?, ?, ?, ?, ?)
         `;
+        
+        // Generate Telegram avatar URL
+        const avatarUrl = user.photo_url || `https://t.me/i/userpic/320/${user.id}.jpg`;
         
         db.run(userQuery, [
             user.id,
@@ -443,7 +446,8 @@ app.post('/api/telegram/widget-auth', (req, res) => {
             clientIP,
             deviceInfo.device_type,
             deviceInfo.browser,
-            deviceInfo.os
+            deviceInfo.os,
+            avatarUrl
         ], function(err) {
             if (err) {
                 console.error('Error creating/updating user:', err);
@@ -1275,7 +1279,7 @@ app.get('/api/user/me', (req, res) => {
     }
     
     const query = `
-        SELECT u.*, us.session_token, up.nickname, up.bio, up.avatar_url, up.is_verified,
+        SELECT u.*, us.session_token, up.nickname, up.bio, up.avatar_url as profile_avatar_url, up.is_verified,
                a.id as admin_id, a.username as admin_username
         FROM users u
         JOIN user_sessions us ON u.id = us.user_id
@@ -1298,6 +1302,9 @@ app.get('/api/user/me', (req, res) => {
             return;
         }
         
+        // Use profile avatar if available, otherwise use Telegram avatar
+        const avatarUrl = user.profile_avatar_url || user.avatar_url || `https://t.me/i/userpic/320/${user.telegram_id}.jpg`;
+        
         res.json({
             id: user.telegram_id,
             username: user.username,
@@ -1307,7 +1314,7 @@ app.get('/api/user/me', (req, res) => {
             is_premium: user.is_premium,
             nickname: user.nickname,
             bio: user.bio,
-            avatar_url: user.avatar_url,
+            avatar_url: avatarUrl,
             is_verified: user.is_verified || false,
             is_admin: !!user.admin_id,
             admin_username: user.admin_username
@@ -1320,7 +1327,7 @@ app.get('/api/user/:userId/profile', (req, res) => {
     const userId = req.params.userId;
     
     const query = `
-        SELECT u.*, up.nickname, up.bio, up.avatar_url, up.is_verified, up.verified_at,
+        SELECT u.*, up.nickname, up.bio, up.avatar_url as profile_avatar_url, up.is_verified, up.verified_at,
                COUNT(DISTINCT r.id) as reviews_count,
                COUNT(DISTINCT fc.channel_id) as favorite_channels_count,
                a.id as admin_id, a.username as admin_username
@@ -1345,6 +1352,9 @@ app.get('/api/user/:userId/profile', (req, res) => {
             return;
         }
         
+        // Use profile avatar if available, otherwise use Telegram avatar
+        const avatarUrl = user.profile_avatar_url || user.avatar_url || `https://t.me/i/userpic/320/${user.telegram_id}.jpg`;
+        
         res.json({
             id: user.telegram_id,
             username: user.username,
@@ -1352,7 +1362,7 @@ app.get('/api/user/:userId/profile', (req, res) => {
             last_name: user.last_name,
             nickname: user.nickname,
             bio: user.bio,
-            avatar_url: user.avatar_url,
+            avatar_url: avatarUrl,
             is_verified: user.is_verified || false,
             verified_at: user.verified_at,
             reviews_count: user.reviews_count || 0,
