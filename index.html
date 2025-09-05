@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Каталог Telegram каналов</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1 class="bot-name">@ratingcf_bot</h1>
+                    <p class="made-by">made by @adzuconf</p>
+                </div>
+                <div class="header-right">
+                    <div id="userStatus" class="user-status hidden">
+                        <div class="user-info">
+                            <span id="userName" class="user-name"></span>
+                            <button id="logoutBtn" class="logout-btn" onclick="logoutUser()" title="Выйти">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                    <polyline points="16,17 21,12 16,7"></polyline>
+                                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button id="loginBtn" class="login-btn" onclick="showLoginModal()" title="Войти через Telegram">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 12l2 2 4-4"></path>
+                            <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"></path>
+                            <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"></path>
+                            <path d="M13 12h3a2 2 0 0 1 2 2v1"></path>
+                            <path d="M13 12H9a2 2 0 0 0-2 2v1"></path>
+                        </svg>
+                        <span>Войти</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Search -->
+        <main class="main-search">
+            <div class="search-container">
+                <div class="search-header">
+                    <h2 class="search-title">Поиск каналов</h2>
+                </div>
+                
+                <div class="main-search-bar">
+                    <svg class="search-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" id="mainSearchInput" placeholder="Поиск" class="main-search-input">
+                </div>
+
+                <!-- Search Results -->
+                <div id="mainSearchResults" class="main-search-results hidden">
+                    <div class="results-header">
+                        <h3 id="mainResultsCount">Показано - результатов</h3>
+                    </div>
+                    <div id="mainResultsList" class="results-list">
+                        <!-- Results will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Secondary Menu -->
+        <div class="secondary-menu">
+            <!-- Add Channel Button -->
+            <button class="secondary-button add-button" onclick="showAddChannelPage()">
+                <div class="button-content">
+                    <svg class="plus-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span class="button-text">Добавить канал</span>
+                </div>
+            </button>
+
+            <!-- Admin Panel Button -->
+            <button class="secondary-button admin-button" onclick="showAdminPanel()">
+                <div class="button-content">
+                    <span class="button-text">Админ-панель</span>
+                </div>
+            </button>
+        </div>
+
+        <!-- Info Section -->
+        <section class="info-section">
+            <div class="info-block">
+                <h3 class="info-question">(?) Зачем нужен этот бот?</h3>
+                <p class="info-text">
+                    В этом боте вы можете искать кф по названию/тегам или оставлять на них отзывы публично или анонимно. 
+                    Это поможет людям находить интересующие их кф намного проще чем через поиск телеграм или вп
+                </p>
+                <p class="info-instruction">(!) По всем вопросам писать прямо в бота</p>
+            </div>
+        </section>
+    </div>
+
+    <!-- Search Page -->
+    <div id="searchPage" class="page hidden">
+        <header class="page-header">
+            <button class="back-button" onclick="showMainPage()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15,18 9,12 15,6"></polyline>
+                </svg>
+            </button>
+            <h2 class="page-title">Поиск каналов</h2>
+        </header>
+
+        <div class="search-container">
+            <div class="search-bar">
+                <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input type="text" id="searchInput" placeholder="тут поиск" class="search-input">
+                <button class="search-submit" onclick="performSearch()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="results-header">
+                <h3 id="resultsCount">Показано - результатов</h3>
+            </div>
+
+            <div id="searchResults" class="search-results">
+                <!-- Results will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Channel Page -->
+    <div id="addChannelPage" class="page hidden">
+        <header class="page-header">
+            <button class="back-button" onclick="showMainPage()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15,18 9,12 15,6"></polyline>
+                </svg>
+            </button>
+            <h2 class="page-title">Добавить канал</h2>
+        </header>
+
+        <div class="add-channel-container">
+            <form id="addChannelForm" class="add-channel-form">
+                <div class="input-group">
+                    <input type="text" id="channelName" placeholder="Название канала" class="form-input" required>
+                </div>
+
+                <div class="input-group">
+                    <input type="url" id="channelLink" placeholder="Ссылка на канал" class="form-input" required>
+                    <p class="input-hint">Ссылку писать в формате https://t.me/username</p>
+                </div>
+
+                <div class="input-group">
+                    <textarea id="channelDescription" placeholder="Краткое описание" class="form-textarea" required></textarea>
+                </div>
+
+                <div class="input-group">
+                    <label class="form-label">Теги канала:</label>
+                    <div class="tags-container">
+                        <div id="selectedTags" class="selected-tags">
+                            <!-- Selected tags will be displayed here -->
+                        </div>
+                        <div class="tags-input-container">
+                            <select id="channelTags" class="form-select">
+                                <option value="">Выберите тег</option>
+                                <!-- Tags will be populated by JavaScript -->
+                            </select>
+                            <button type="button" class="add-tag-btn" onclick="addSelectedTag()">+</button>
+                        </div>
+                        <button type="button" class="create-tag-btn" onclick="openAddTagModal()">+ Создать новый тег</button>
+                    </div>
+                </div>
+
+                <div class="moderation-info">
+                    <p>Все каналы перед добавлением в каталог проходят модерацию, каналы нарушающие правила телеграм запрещены</p>
+                </div>
+
+                <button type="submit" class="submit-button">Добавить канал</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Channel Details Page -->
+    <div id="channelDetailsPage" class="page hidden">
+        <header class="page-header">
+            <button class="back-button" onclick="showSearchPage()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15,18 9,12 15,6"></polyline>
+                </svg>
+            </button>
+            <h2 class="page-title">Детали канала</h2>
+        </header>
+
+        <div id="channelDetails" class="channel-details">
+            <!-- Channel details will be populated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Admin Panel Page -->
+    <div id="adminPanelPage" class="page hidden">
+        <header class="page-header">
+            <button class="back-button" onclick="showMainPage()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15,18 9,12 15,6"></polyline>
+                </svg>
+            </button>
+            <h2 class="page-title">Админ-панель</h2>
+            <button class="logout-button" onclick="logoutAdmin()" id="logoutBtn" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16,17 21,12 16,7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </button>
+        </header>
+
+        <!-- Admin Login Form -->
+        <div id="adminLoginForm" class="admin-login">
+            <h3 class="admin-title">Вход в админ-панель</h3>
+            <form id="loginForm" class="admin-form">
+                <div class="input-group">
+                    <input type="text" id="adminUsername" placeholder="Имя пользователя" class="form-input" required>
+                </div>
+                <div class="input-group">
+                    <input type="password" id="adminPassword" placeholder="Пароль" class="form-input" required>
+                </div>
+                <button type="submit" class="submit-button">Войти</button>
+            </form>
+        </div>
+
+        <!-- Admin Dashboard - Completely separate and hidden -->
+        <div id="adminDashboard" class="admin-dashboard" style="display: none;">
+            <!-- Admin Search -->
+            <div class="admin-search">
+                <div class="search-bar">
+                    <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" id="adminSearchInput" placeholder="Поиск каналов, отзывов, тегов..." class="search-input">
+                    <button class="search-submit" onclick="performAdminSearch()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Admin Tabs -->
+            <div class="admin-tabs">
+                <button class="admin-tab active" onclick="showAdminTab('channels')">Каналы</button>
+                <button class="admin-tab" onclick="showAdminTab('reviews')">Отзывы</button>
+                <button class="admin-tab" onclick="showAdminTab('tags')">Теги</button>
+                <button class="admin-tab" onclick="showAdminTab('users')">Пользователи</button>
+                <button class="admin-tab" onclick="showAdminTab('statistics')">Статистика</button>
+                <button class="admin-tab" onclick="showAdminTab('admins')">Админы</button>
+            </div>
+
+            <!-- Admin Content -->
+            <div id="adminContent" class="admin-content">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Tag Modal -->
+    <div id="addTagModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Добавить тег</h3>
+                <button class="modal-close" onclick="closeAddTagModal()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form id="addTagForm" class="modal-form">
+                <div class="input-group">
+                    <input type="text" id="tagName" placeholder="Название тега" class="form-input" required>
+                </div>
+                <button type="submit" class="submit-button">Добавить тег</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Admin Modal -->
+    <div id="addAdminModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Добавить админа</h3>
+                <button class="modal-close" onclick="closeAddAdminModal()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form id="addAdminForm" class="modal-form">
+                <div class="input-group">
+                    <input type="text" id="adminUsername" placeholder="Имя пользователя" class="form-input" required>
+                </div>
+                <div class="input-group">
+                    <input type="password" id="adminPassword" placeholder="Пароль" class="form-input" required>
+                </div>
+                <div class="input-group">
+                    <input type="password" id="adminPasswordConfirm" placeholder="Подтвердите пароль" class="form-input" required>
+                </div>
+                <button type="submit" class="submit-button">Добавить админа</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Вход через Telegram</h3>
+                <button class="modal-close" onclick="closeLoginModal()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="login-modal-content">
+                <div class="telegram-info">
+                    <div class="telegram-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 12l2 2 4-4"></path>
+                            <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"></path>
+                            <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"></path>
+                            <path d="M13 12h3a2 2 0 0 1 2 2v1"></path>
+                            <path d="M13 12H9a2 2 0 0 0-2 2v1"></path>
+                        </svg>
+                    </div>
+                    <h4>Войдите через Telegram</h4>
+                    <p>Для добавления каналов и отзывов необходимо войти через Telegram</p>
+                    <div id="telegramLoginWidget" class="telegram-widget-container">
+                        <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                                data-telegram-login="ratingcf_bot" 
+                                data-size="large" 
+                                data-onauth="onTelegramAuth(user)" 
+                                data-request-access="write">
+                        </script>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
