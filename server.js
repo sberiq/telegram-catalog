@@ -1079,8 +1079,11 @@ app.post('/api/admin/login', (req, res) => {
         return;
     }
     
+    // Encode password to Base64 for comparison
+    const encodedPassword = Buffer.from(password).toString('base64');
+    
     const query = 'SELECT * FROM admins WHERE username = ? AND password = ?';
-    db.get(query, [username, password], (err, admin) => {
+    db.get(query, [username, encodedPassword], (err, admin) => {
         if (err) {
             console.error('Error checking admin credentials:', err);
             res.status(500).json({ error: 'Database error' });
