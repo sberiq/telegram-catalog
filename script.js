@@ -89,7 +89,6 @@ function updateAuthUI() {
     const loginBtn = document.getElementById('loginBtn');
     const userStatus = document.getElementById('userStatus');
     const userName = document.getElementById('userName');
-    const userAvatar = document.getElementById('userAvatar');
     const verifiedBadge = document.getElementById('verifiedBadge');
     
     if (isUserAuthenticated()) {
@@ -104,14 +103,6 @@ function updateAuthUI() {
             displayName = '👑 ' + displayName;
         }
         userName.textContent = displayName;
-        
-        // Update avatar
-        if (currentUser.avatar_url) {
-            userAvatar.src = currentUser.avatar_url;
-        } else {
-            // Use Telegram avatar or default
-            userAvatar.src = `https://t.me/i/userpic/320/${currentUser.id}.jpg` || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiM2MzY2RjEiLz4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI4IiB5PSI4Ij4KPHBhdGggZD0iTTggMEE4IDggMCAxIDEgOCAxNkE4IDggMCAxIDEgOCAwWiIgZmlsbD0iI0ZGRiIvPgo8cGF0aCBkPSJNOCA0QzEwLjIwOTEgNCAxMiA1Ljc5MDg2IDEyIDhDMTIgMTAuMjA5MSAxMC4yMDkxIDEyIDggMTJDNS43OTA4NiAxMiA0IDEwLjIwOTEgNCA4QzQgNS43OTA4NiA1Ljc5MDg2IDQgOCA0WiIgZmlsbD0iIzYzNjZGMSIvPgo8L3N2Zz4KPC9zdmc+';
-        }
         
         // Show verified badge if user is verified
         if (currentUser.is_verified) {
@@ -1565,6 +1556,11 @@ function displayAdminUsers(users, pagination) {
                     <div class="admin-item-details">Регистрация: ${formatDate(user.created_at)}</div>
                     <div class="admin-item-details">Последний визит: ${formatDate(user.last_seen)}</div>
                     <div class="admin-item-details">Последняя активность: ${formatDate(user.last_activity)}</div>
+                    ${user.is_blocked ? `
+                        <div class="admin-item-details" style="color: #ef4444;">
+                            <strong>Заблокирован:</strong> ${user.blocked_reason || 'Причина не указана'}
+                        </div>
+                    ` : ''}
                 </div>
                 <div class="admin-item-actions">
                     <button class="admin-action-btn view" onclick="viewUserDetails(${user.telegram_id})" title="Подробнее">
@@ -1584,6 +1580,23 @@ function displayAdminUsers(users, pagination) {
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    `}
+                    ${!user.is_blocked ? `
+                        <button class="admin-action-btn block" onclick="blockUser(${user.telegram_id})" title="Заблокировать">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <circle cx="12" cy="16" r="1"></circle>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                        </button>
+                    ` : `
+                        <button class="admin-action-btn unblock" onclick="unblockUser(${user.telegram_id})" title="Разблокировать">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <circle cx="12" cy="16" r="1"></circle>
+                                <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
                             </svg>
                         </button>
                     `}
@@ -1884,6 +1897,65 @@ async function unlinkAdminTelegram(adminId) {
     } catch (error) {
         console.error('Error unlinking admin Telegram ID:', error);
         showError('Ошибка отвязки Telegram ID');
+    }
+}
+
+// Block/Unblock user functions
+async function blockUser(userId) {
+    const reason = prompt('Введите причину блокировки:');
+    
+    if (!reason) {
+        showError('Причина блокировки обязательна');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/admin/users/${userId}/block`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                reason: reason
+            })
+        });
+        
+        if (response.ok) {
+            showSuccess('Пользователь заблокирован');
+            loadAdminUsers(); // Reload users list
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Ошибка блокировки пользователя');
+        }
+    } catch (error) {
+        console.error('Error blocking user:', error);
+        showError('Ошибка блокировки пользователя');
+    }
+}
+
+async function unblockUser(userId) {
+    if (!confirm('Вы уверены, что хотите разблокировать этого пользователя?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/admin/users/${userId}/unblock`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            showSuccess('Пользователь разблокирован');
+            loadAdminUsers(); // Reload users list
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Ошибка разблокировки пользователя');
+        }
+    } catch (error) {
+        console.error('Error unblocking user:', error);
+        showError('Ошибка разблокировки пользователя');
     }
 }
 

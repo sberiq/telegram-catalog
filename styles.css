@@ -2251,6 +2251,24 @@ body.main-page .info-instruction {
     background: #d97706;
 }
 
+.admin-action-btn.block {
+    background: #ef4444;
+    color: white;
+}
+
+.admin-action-btn.block:hover {
+    background: #dc2626;
+}
+
+.admin-action-btn.unblock {
+    background: #10b981;
+    color: white;
+}
+
+.admin-action-btn.unblock:hover {
+    background: #059669;
+}
+
 /* Yandex Ads Section */
 .ads-section {
     background: #1a1a1a;

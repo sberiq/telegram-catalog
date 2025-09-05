@@ -124,6 +124,20 @@ function initializeDatabase() {
         )
     `);
 
+    // Create review_likes table for likes/dislikes on reviews
+    db.run(`
+        CREATE TABLE IF NOT EXISTS review_likes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            review_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            is_like BOOLEAN NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (review_id) REFERENCES reviews (id),
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            UNIQUE(review_id, user_id)
+        )
+    `);
+
     // Create user_stats table
     db.run(`
         CREATE TABLE IF NOT EXISTS user_stats (
@@ -239,7 +253,8 @@ function initializeDatabase() {
     const userColumns = [
         'is_bot', 'can_join_groups', 'can_read_all_group_messages', 'supports_inline_queries',
         'last_activity', 'total_sessions', 'total_requests', 'user_agent', 'ip_address',
-        'country', 'city', 'timezone', 'device_type', 'browser', 'os', 'avatar_url'
+        'country', 'city', 'timezone', 'device_type', 'browser', 'os', 'avatar_url',
+        'is_blocked', 'blocked_reason', 'blocked_at', 'blocked_by'
     ];
     
     userColumns.forEach(column => {
@@ -1158,13 +1173,22 @@ app.post('/api/channels', (req, res) => {
         return;
     }
     
-    // Get user ID from session
+    // Get user ID from session and check if user is blocked
     let userId = null;
     if (sessionToken) {
-        const userQuery = 'SELECT user_id FROM user_sessions WHERE session_token = ?';
+        const userQuery = `
+            SELECT u.id, u.is_blocked 
+            FROM users u
+            JOIN user_sessions us ON u.id = us.user_id
+            WHERE us.session_token = ?
+        `;
         db.get(userQuery, [sessionToken], (err, row) => {
             if (!err && row) {
-                userId = row.user_id;
+                if (row.is_blocked) {
+                    res.status(403).json({ error: 'Ваш аккаунт заблокирован' });
+                    return;
+                }
+                userId = row.id;
             }
             insertChannel();
         });
@@ -1228,20 +1252,24 @@ app.post('/api/channels/:id/reviews', (req, res) => {
         return;
     }
     
-    // Get user info from session
+    // Get user info from session and check if user is blocked
     let userId = null;
     let userDisplayName = 'Анонимный пользователь';
     let isAnonymousReview = is_anonymous || false;
     
     if (sessionToken) {
         const userQuery = `
-            SELECT u.id, u.first_name, u.last_name, u.username
+            SELECT u.id, u.first_name, u.last_name, u.username, u.is_blocked
             FROM users u
             JOIN user_sessions s ON u.id = s.user_id
             WHERE s.session_token = ?
         `;
         db.get(userQuery, [sessionToken], (err, user) => {
             if (!err && user) {
+                if (user.is_blocked) {
+                    res.status(403).json({ error: 'Ваш аккаунт заблокирован' });
+                    return;
+                }
                 userId = user.id;
                 if (isAnonymousReview) {
                     userDisplayName = 'Анонимный пользователь';
@@ -1976,6 +2004,59 @@ app.post('/api/admin/unlink-telegram', (req, res) => {
     });
 });
 
+// Block user
+app.post('/api/admin/users/:userId/block', (req, res) => {
+    const userId = req.params.userId;
+    const { reason } = req.body;
+    
+    const query = `
+        UPDATE users 
+        SET is_blocked = 1, blocked_reason = ?, blocked_at = CURRENT_TIMESTAMP
+        WHERE telegram_id = ?
+    `;
+    
+    db.run(query, [reason || 'Заблокирован администратором', userId], function(err) {
+        if (err) {
+            console.error('Error blocking user:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (this.changes === 0) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'User blocked successfully' });
+    });
+});
+
+// Unblock user
+app.post('/api/admin/users/:userId/unblock', (req, res) => {
+    const userId = req.params.userId;
+    
+    const query = `
+        UPDATE users 
+        SET is_blocked = 0, blocked_reason = NULL, blocked_at = NULL
+        WHERE telegram_id = ?
+    `;
+    
+    db.run(query, [userId], function(err) {
+        if (err) {
+            console.error('Error unblocking user:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (this.changes === 0) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'User unblocked successfully' });
+    });
+});
+
 // Admin login
 app.post('/api/admin/login', (req, res) => {
     const { username, password } = req.body;
@@ -2568,6 +2649,131 @@ app.get('/api/admin/reviews', (req, res) => {
 app.use((err, req, res, next) => {
     console.error('Unhandled error:', err);
     res.status(500).json({ error: 'Internal server error' });
+});
+
+// Like/Dislike review
+app.post('/api/reviews/:reviewId/like', (req, res) => {
+    const reviewId = req.params.reviewId;
+    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    const { isLike } = req.body;
+    
+    if (!sessionToken) {
+        res.status(401).json({ error: 'No session token provided' });
+        return;
+    }
+    
+    // Get user ID from session
+    const userQuery = `
+        SELECT u.id FROM users u
+        JOIN user_sessions us ON u.id = us.user_id
+        WHERE us.session_token = ?
+    `;
+    
+    db.get(userQuery, [sessionToken], (err, user) => {
+        if (err || !user) {
+            res.status(401).json({ error: 'Invalid session' });
+            return;
+        }
+        
+        // Insert or update like/dislike
+        const likeQuery = `
+            INSERT OR REPLACE INTO review_likes (review_id, user_id, is_like)
+            VALUES (?, ?, ?)
+        `;
+        
+        db.run(likeQuery, [reviewId, user.id, isLike], function(err) {
+            if (err) {
+                console.error('Error liking review:', err);
+                res.status(500).json({ error: 'Database error' });
+                return;
+            }
+            
+            // Get updated like/dislike counts
+            const countQuery = `
+                SELECT 
+                    COUNT(CASE WHEN is_like = 1 THEN 1 END) as likes_count,
+                    COUNT(CASE WHEN is_like = 0 THEN 1 END) as dislikes_count
+                FROM review_likes 
+                WHERE review_id = ?
+            `;
+            
+            db.get(countQuery, [reviewId], (err, counts) => {
+                if (err) {
+                    console.error('Error getting like counts:', err);
+                    res.status(500).json({ error: 'Database error' });
+                    return;
+                }
+                
+                res.json({
+                    success: true,
+                    likes_count: counts.likes_count || 0,
+                    dislikes_count: counts.dislikes_count || 0
+                });
+            });
+        });
+    });
+});
+
+// Remove like/dislike
+app.delete('/api/reviews/:reviewId/like', (req, res) => {
+    const reviewId = req.params.reviewId;
+    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!sessionToken) {
+        res.status(401).json({ error: 'No session token provided' });
+        return;
+    }
+    
+    // Get user ID from session
+    const userQuery = `
+        SELECT u.id FROM users u
+        JOIN user_sessions us ON u.id = us.user_id
+        WHERE us.session_token = ?
+    `;
+    
+    db.get(userQuery, [sessionToken], (err, user) => {
+        if (err || !user) {
+            res.status(401).json({ error: 'Invalid session' });
+            return;
+        }
+        
+        // Remove like/dislike
+        const deleteQuery = `
+            DELETE FROM review_likes 
+            WHERE review_id = ? AND user_id = ?
+        `;
+        
+        db.run(deleteQuery, [reviewId, user.id], function(err) {
+            if (err) {
+                console.error('Error removing like:', err);
+                res.status(500).json({ error: 'Database error' });
+                return;
+            }
+            
+            // Get updated like/dislike counts
+            const countQuery = `
+                SELECT 
+                    COUNT(CASE WHEN is_like = 1 THEN 1 END) as likes_count,
+                    COUNT(CASE WHEN is_like = 0 THEN 1 END) as dislikes_count
+                FROM review_likes 
+                WHERE review_id = ?
+            `;
+            
+            db.get(countQuery, [reviewId], (err, counts) => {
+                if (err) {
+                    console.error('Error getting like counts:', err);
+                    res.status(500).json({ error: 'Database error' });
+                    return;
+                }
+                
+                res.json({
+                    success: true,
+                    likes_count: counts.likes_count || 0,
+                    dislikes_count: counts.dislikes_count || 0
+                });
+            });
+        });
+    });
 });
 
 // Start server
