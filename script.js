@@ -1682,6 +1682,32 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAuthUI();
 });
 
+// User Menu Functions
+function toggleUserMenu() {
+    const dropdown = document.getElementById('userDropdown');
+    const profileBtn = document.getElementById('profileBtn');
+    
+    if (dropdown.classList.contains('hidden')) {
+        dropdown.classList.remove('hidden');
+        profileBtn.classList.add('active');
+    } else {
+        dropdown.classList.add('hidden');
+        profileBtn.classList.remove('active');
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    const userMenu = document.querySelector('.user-menu');
+    const dropdown = document.getElementById('userDropdown');
+    const profileBtn = document.getElementById('profileBtn');
+    
+    if (userMenu && !userMenu.contains(event.target)) {
+        dropdown.classList.add('hidden');
+        profileBtn.classList.remove('active');
+    }
+});
+
 // Profile Functions
 function showProfileModal() {
     if (!isUserAuthenticated()) {
@@ -1689,12 +1715,87 @@ function showProfileModal() {
         return;
     }
     
+    // Close dropdown
+    document.getElementById('userDropdown').classList.add('hidden');
+    document.getElementById('profileBtn').classList.remove('active');
+    
     loadProfileData();
     document.getElementById('profileModal').classList.remove('hidden');
 }
 
 function closeProfileModal() {
     document.getElementById('profileModal').classList.add('hidden');
+}
+
+function showFavoriteChannels() {
+    if (!isUserAuthenticated()) {
+        showLoginModal();
+        return;
+    }
+    
+    // Close dropdown
+    document.getElementById('userDropdown').classList.add('hidden');
+    document.getElementById('profileBtn').classList.remove('active');
+    
+    // Show profile modal and focus on favorites section
+    loadProfileData();
+    document.getElementById('profileModal').classList.remove('hidden');
+    
+    // Scroll to favorites section
+    setTimeout(() => {
+        const favoritesSection = document.querySelector('.profile-section:last-child');
+        if (favoritesSection) {
+            favoritesSection.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, 100);
+}
+
+function showMyReviews() {
+    if (!isUserAuthenticated()) {
+        showLoginModal();
+        return;
+    }
+    
+    // Close dropdown
+    document.getElementById('userDropdown').classList.add('hidden');
+    document.getElementById('profileBtn').classList.remove('active');
+    
+    // Show profile modal and focus on reviews section
+    loadProfileData();
+    document.getElementById('profileModal').classList.remove('hidden');
+    
+    // Scroll to reviews section
+    setTimeout(() => {
+        const reviewsSection = document.querySelector('.profile-section:nth-child(2)');
+        if (reviewsSection) {
+            reviewsSection.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, 100);
+}
+
+function logoutUser() {
+    // Close dropdown
+    document.getElementById('userDropdown').classList.add('hidden');
+    document.getElementById('profileBtn').classList.remove('active');
+    
+    // Clear user data
+    currentUser = null;
+    sessionToken = null;
+    
+    // Clear localStorage
+    localStorage.removeItem('session_token');
+    
+    // Update UI
+    updateAuthUI();
+    
+    // Close any open modals
+    document.getElementById('profileModal').classList.add('hidden');
+    
+    // Show success message
+    showSuccess('Вы успешно вышли из аккаунта');
+    
+    // Return to main page
+    showMainPage();
 }
 
 async function loadProfileData() {
