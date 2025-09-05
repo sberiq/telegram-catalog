@@ -11,6 +11,28 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('.'));
 
+// User activity tracking middleware
+app.use((req, res, next) => {
+    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (sessionToken) {
+        // Update user activity
+        const updateQuery = `
+            UPDATE users 
+            SET last_activity = CURRENT_TIMESTAMP, total_requests = total_requests + 1
+            WHERE id = (SELECT user_id FROM user_sessions WHERE session_token = ?)
+        `;
+        
+        db.run(updateQuery, [sessionToken], (err) => {
+            if (err) {
+                console.error('Error updating user activity:', err);
+            }
+        });
+    }
+    
+    next();
+});
+
 // Database connection
 const db = new sqlite3.Database('./telegram_catalog (1).db', (err) => {
     if (err) {
@@ -33,8 +55,23 @@ function initializeDatabase() {
             last_name TEXT,
             language_code TEXT,
             is_premium BOOLEAN DEFAULT 0,
+            is_bot BOOLEAN DEFAULT 0,
+            can_join_groups BOOLEAN DEFAULT 1,
+            can_read_all_group_messages BOOLEAN DEFAULT 0,
+            supports_inline_queries BOOLEAN DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
+            last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
+            total_sessions INTEGER DEFAULT 1,
+            total_requests INTEGER DEFAULT 0,
+            user_agent TEXT,
+            ip_address TEXT,
+            country TEXT,
+            city TEXT,
+            timezone TEXT,
+            device_type TEXT,
+            browser TEXT,
+            os TEXT
         )
     `);
 
@@ -167,6 +204,21 @@ function initializeDatabase() {
         }
     });
 
+    // Add new columns to users table for enhanced data collection
+    const userColumns = [
+        'is_bot', 'can_join_groups', 'can_read_all_group_messages', 'supports_inline_queries',
+        'last_activity', 'total_sessions', 'total_requests', 'user_agent', 'ip_address',
+        'country', 'city', 'timezone', 'device_type', 'browser', 'os'
+    ];
+    
+    userColumns.forEach(column => {
+        db.run(`ALTER TABLE users ADD COLUMN ${column} TEXT`, (err) => {
+            if (err && !err.message.includes('duplicate column name')) {
+                console.error(`Error adding ${column} to users:`, err);
+            }
+        });
+    });
+
     // Create main admin if not exists
     db.run(`
         INSERT OR IGNORE INTO admins (username, password) 
@@ -192,6 +244,61 @@ function calculateAverageRating(reviews) {
     if (!reviews || reviews.length === 0) return 0;
     const sum = reviews.reduce((acc, review) => acc + (review.rating || 5), 0);
     return Math.round((sum / reviews.length) * 10) / 10;
+}
+
+// Helper function to parse user agent and get device info
+function parseUserAgent(userAgent) {
+    if (!userAgent) return { device_type: 'Unknown', browser: 'Unknown', os: 'Unknown' };
+    
+    const ua = userAgent.toLowerCase();
+    
+    // Device type
+    let device_type = 'Desktop';
+    if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) {
+        device_type = 'Mobile';
+    } else if (ua.includes('tablet') || ua.includes('ipad')) {
+        device_type = 'Tablet';
+    }
+    
+    // Browser
+    let browser = 'Unknown';
+    if (ua.includes('chrome') && !ua.includes('edg')) {
+        browser = 'Chrome';
+    } else if (ua.includes('firefox')) {
+        browser = 'Firefox';
+    } else if (ua.includes('safari') && !ua.includes('chrome')) {
+        browser = 'Safari';
+    } else if (ua.includes('edg')) {
+        browser = 'Edge';
+    } else if (ua.includes('opera')) {
+        browser = 'Opera';
+    }
+    
+    // OS
+    let os = 'Unknown';
+    if (ua.includes('windows')) {
+        os = 'Windows';
+    } else if (ua.includes('mac')) {
+        os = 'macOS';
+    } else if (ua.includes('linux')) {
+        os = 'Linux';
+    } else if (ua.includes('android')) {
+        os = 'Android';
+    } else if (ua.includes('ios') || ua.includes('iphone') || ua.includes('ipad')) {
+        os = 'iOS';
+    }
+    
+    return { device_type, browser, os };
+}
+
+// Helper function to get client IP
+function getClientIP(req) {
+    return req.headers['x-forwarded-for'] || 
+           req.headers['x-real-ip'] || 
+           req.connection.remoteAddress || 
+           req.socket.remoteAddress ||
+           (req.connection.socket ? req.connection.socket.remoteAddress : null) ||
+           req.ip;
 }
 
 // Helper function to generate star rating HTML
@@ -302,11 +409,21 @@ app.post('/api/telegram/widget-auth', (req, res) => {
     }
     
     try {
-        // Create or update user
+        const userAgent = req.get('User-Agent') || '';
+        const clientIP = getClientIP(req);
+        const deviceInfo = parseUserAgent(userAgent);
+        
+        // Create or update user with enhanced data
         const userQuery = `
             INSERT OR REPLACE INTO users 
-            (telegram_id, username, first_name, last_name, language_code, is_premium, last_seen)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            (telegram_id, username, first_name, last_name, language_code, is_premium, 
+             is_bot, can_join_groups, can_read_all_group_messages, supports_inline_queries,
+             last_seen, last_activity, total_sessions, total_requests, user_agent, 
+             ip_address, device_type, browser, os)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 
+                    COALESCE((SELECT total_sessions + 1 FROM users WHERE telegram_id = ?), 1),
+                    COALESCE((SELECT total_requests FROM users WHERE telegram_id = ?), 0),
+                    ?, ?, ?, ?, ?)
         `;
         
         db.run(userQuery, [
@@ -315,7 +432,18 @@ app.post('/api/telegram/widget-auth', (req, res) => {
             user.first_name || null,
             user.last_name || null,
             user.language_code || null,
-            user.is_premium || 0
+            user.is_premium || 0,
+            user.is_bot || 0,
+            user.can_join_groups !== false ? 1 : 0,
+            user.can_read_all_group_messages || 0,
+            user.supports_inline_queries || 0,
+            user.id, // for total_sessions calculation
+            user.id, // for total_requests calculation
+            userAgent,
+            clientIP,
+            deviceInfo.device_type,
+            deviceInfo.browser,
+            deviceInfo.os
         ], function(err) {
             if (err) {
                 console.error('Error creating/updating user:', err);
@@ -333,8 +461,8 @@ app.post('/api/telegram/widget-auth', (req, res) => {
             db.run(sessionQuery, [
                 this.lastID,
                 sessionToken,
-                req.get('User-Agent') || '',
-                req.ip || req.connection.remoteAddress || ''
+                userAgent,
+                clientIP
             ], (err) => {
                 if (err) {
                     console.error('Error creating session:', err);
@@ -1557,6 +1685,186 @@ app.post('/api/admin/unlink-user', (req, res) => {
         }
         
         res.json({ success: true, message: 'Admin unlinked from user successfully' });
+    });
+});
+
+// Get all users for admin (with pagination and filters)
+app.get('/api/admin/users', (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search || '';
+    const sortBy = req.query.sortBy || 'last_seen';
+    const sortOrder = req.query.sortOrder || 'DESC';
+    
+    const offset = (page - 1) * limit;
+    
+    let whereClause = '';
+    let params = [];
+    
+    if (search) {
+        whereClause = `WHERE u.first_name LIKE ? OR u.last_name LIKE ? OR u.username LIKE ? OR u.telegram_id LIKE ?`;
+        params = [`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`];
+    }
+    
+    const query = `
+        SELECT u.*, up.nickname, up.is_verified, up.verified_at,
+               COUNT(DISTINCT r.id) as reviews_count,
+               COUNT(DISTINCT fc.channel_id) as favorites_count,
+               COUNT(DISTINCT us.id) as sessions_count
+        FROM users u
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        LEFT JOIN reviews r ON u.id = r.user_id AND r.status = 'approved'
+        LEFT JOIN user_favorite_channels fc ON u.id = fc.user_id
+        LEFT JOIN user_sessions us ON u.id = us.user_id
+        ${whereClause}
+        GROUP BY u.id
+        ORDER BY u.${sortBy} ${sortOrder}
+        LIMIT ? OFFSET ?
+    `;
+    
+    params.push(limit, offset);
+    
+    db.all(query, params, (err, users) => {
+        if (err) {
+            console.error('Error getting users:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        // Get total count
+        const countQuery = `SELECT COUNT(*) as total FROM users u ${whereClause}`;
+        db.get(countQuery, params.slice(0, -2), (err, countResult) => {
+            if (err) {
+                console.error('Error getting user count:', err);
+                res.status(500).json({ error: 'Database error' });
+                return;
+            }
+            
+            res.json({
+                users: users,
+                pagination: {
+                    page: page,
+                    limit: limit,
+                    total: countResult.total,
+                    pages: Math.ceil(countResult.total / limit)
+                }
+            });
+        });
+    });
+});
+
+// Get detailed user info for admin
+app.get('/api/admin/users/:userId', (req, res) => {
+    const userId = req.params.userId;
+    
+    const query = `
+        SELECT u.*, up.nickname, up.bio, up.avatar_url, up.is_verified, up.verified_at,
+               COUNT(DISTINCT r.id) as reviews_count,
+               COUNT(DISTINCT fc.channel_id) as favorites_count,
+               COUNT(DISTINCT us.id) as sessions_count
+        FROM users u
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        LEFT JOIN reviews r ON u.id = r.user_id AND r.status = 'approved'
+        LEFT JOIN user_favorite_channels fc ON u.id = fc.user_id
+        LEFT JOIN user_sessions us ON u.id = us.user_id
+        WHERE u.telegram_id = ?
+        GROUP BY u.id
+    `;
+    
+    db.get(query, [userId], (err, user) => {
+        if (err) {
+            console.error('Error getting user details:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        
+        // Get user sessions
+        const sessionsQuery = `
+            SELECT * FROM user_sessions 
+            WHERE user_id = (SELECT id FROM users WHERE telegram_id = ?)
+            ORDER BY created_at DESC
+            LIMIT 10
+        `;
+        
+        db.all(sessionsQuery, [userId], (err, sessions) => {
+            if (err) {
+                console.error('Error getting user sessions:', err);
+                res.status(500).json({ error: 'Database error' });
+                return;
+            }
+            
+            res.json({
+                ...user,
+                recent_sessions: sessions
+            });
+        });
+    });
+});
+
+// Get user statistics for admin dashboard
+app.get('/api/admin/statistics', (req, res) => {
+    const queries = [
+        // Total users
+        'SELECT COUNT(*) as total_users FROM users',
+        // New users today
+        "SELECT COUNT(*) as new_users_today FROM users WHERE DATE(created_at) = DATE('now')",
+        // Active users (last 7 days)
+        "SELECT COUNT(*) as active_users FROM users WHERE last_seen > datetime('now', '-7 days')",
+        // Premium users
+        'SELECT COUNT(*) as premium_users FROM users WHERE is_premium = 1',
+        // Verified users
+        'SELECT COUNT(*) as verified_users FROM user_profiles WHERE is_verified = 1',
+        // Device statistics
+        'SELECT device_type, COUNT(*) as count FROM users GROUP BY device_type',
+        // Browser statistics
+        'SELECT browser, COUNT(*) as count FROM users GROUP BY browser',
+        // OS statistics
+        'SELECT os, COUNT(*) as count FROM users GROUP BY os',
+        // Language statistics
+        'SELECT language_code, COUNT(*) as count FROM users WHERE language_code IS NOT NULL GROUP BY language_code'
+    ];
+    
+    Promise.all(queries.map(query => 
+        new Promise((resolve, reject) => {
+            db.all(query, [], (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows);
+            });
+        })
+    )).then(results => {
+        const [
+            totalUsers,
+            newUsersToday,
+            activeUsers,
+            premiumUsers,
+            verifiedUsers,
+            deviceStats,
+            browserStats,
+            osStats,
+            languageStats
+        ] = results;
+        
+        res.json({
+            overview: {
+                total_users: totalUsers[0].total_users,
+                new_users_today: newUsersToday[0].new_users_today,
+                active_users: activeUsers[0].active_users,
+                premium_users: premiumUsers[0].premium_users,
+                verified_users: verifiedUsers[0].verified_users
+            },
+            device_statistics: deviceStats,
+            browser_statistics: browserStats,
+            os_statistics: osStats,
+            language_statistics: languageStats
+        });
+    }).catch(err => {
+        console.error('Error getting statistics:', err);
+        res.status(500).json({ error: 'Database error' });
     });
 });
 
