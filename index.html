@@ -463,6 +463,29 @@
         </div>
     </div>
 
+    <!-- Yandex Ads Section -->
+    <div class="ads-section">
+        <div class="container">
+            <h3 class="ads-title">Реклама</h3>
+            <!-- Yandex.RTB R-A-17122539-1 -->
+            <div id="yandex_rtb_R-A-17122539-1"></div>
+        </div>
+    </div>
+
+    <!-- Yandex.RTB -->
+    <script>window.yaContextCb=window.yaContextCb||[]</script>
+    <script src="https://yandex.ru/ads/system/context.js" async></script>
+    
+    <script>
+    window.yaContextCb.push(() => {
+        Ya.Context.AdvManager.render({
+            "blockId": "R-A-17122539-1",
+            "renderTo": "yandex_rtb_R-A-17122539-1",
+            "type": "feed"
+        })
+    })
+    </script>
+
     <script src="script.js"></script>
 </body>
 </html>

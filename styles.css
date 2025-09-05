@@ -2285,3 +2285,25 @@ body.main-page .info-instruction {
     font-size: 14px;
     margin-top: 5px;
 }
+
+/* Yandex Ads Section */
+.ads-section {
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    padding: 40px 0;
+    margin-top: 60px;
+}
+
+.ads-title {
+    text-align: center;
+    color: #6c757d;
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 30px;
+}
+
+#yandex_rtb_R-A-17122539-1 {
+    max-width: 100%;
+    margin: 0 auto;
+    text-align: center;
+}

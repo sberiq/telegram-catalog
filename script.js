@@ -1621,6 +1621,14 @@ function displayAdminStatistics(stats) {
                 <h4>Верифицированных</h4>
                 <div class="stat-number">${stats.overview.verified_users}</div>
             </div>
+            <div class="stat-card">
+                <h4>Запросов сегодня</h4>
+                <div class="stat-number">${stats.overview.total_requests_today}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Уникальных посетителей</h4>
+                <div class="stat-number">${stats.overview.unique_visitors_today}</div>
+            </div>
         </div>
         
         <div class="stats-section">
@@ -1670,6 +1678,34 @@ function displayAdminStatistics(stats) {
                 `).join('')}
             </div>
         </div>
+        
+        ${stats.top_endpoints && stats.top_endpoints.length > 0 ? `
+            <div class="stats-section">
+                <h4>Популярные страницы</h4>
+                <div class="stats-list">
+                    ${stats.top_endpoints.map(endpoint => `
+                        <div class="stat-item">
+                            <span>${endpoint.endpoint}</span>
+                            <span>${endpoint.count}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        ${stats.hourly_activity && stats.hourly_activity.length > 0 ? `
+            <div class="stats-section">
+                <h4>Активность по часам (24 часа)</h4>
+                <div class="stats-list">
+                    ${stats.hourly_activity.map(hour => `
+                        <div class="stat-item">
+                            <span>${hour.hour}:00</span>
+                            <span>${hour.count}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
     `;
 }
 

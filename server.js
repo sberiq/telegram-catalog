@@ -14,9 +14,25 @@ app.use(express.static('.'));
 // User activity tracking middleware
 app.use((req, res, next) => {
     const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    const userAgent = req.get('User-Agent') || '';
+    const clientIP = getClientIP(req);
+    
+    // Track all requests for analytics
+    const trackRequest = () => {
+        const insertQuery = `
+            INSERT INTO user_requests (ip_address, user_agent, endpoint, method, created_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `;
+        
+        db.run(insertQuery, [clientIP, userAgent, req.path, req.method], (err) => {
+            if (err && !err.message.includes('no such table')) {
+                console.error('Error tracking request:', err);
+            }
+        });
+    };
     
     if (sessionToken) {
-        // Update user activity
+        // Update user activity for authenticated users
         const updateQuery = `
             UPDATE users 
             SET last_activity = CURRENT_TIMESTAMP, total_requests = total_requests + 1
@@ -29,6 +45,9 @@ app.use((req, res, next) => {
             }
         });
     }
+    
+    // Track all requests
+    trackRequest();
     
     next();
 });
@@ -90,6 +109,18 @@ function initializeDatabase() {
             os TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    `);
+
+    // Create user_requests table for tracking all requests
+    db.run(`
+        CREATE TABLE IF NOT EXISTS user_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip_address TEXT,
+            user_agent TEXT,
+            endpoint TEXT,
+            method TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     `);
 
@@ -1829,6 +1860,10 @@ app.get('/api/admin/statistics', (req, res) => {
         'SELECT COUNT(*) as premium_users FROM users WHERE is_premium = 1',
         // Verified users
         'SELECT COUNT(*) as verified_users FROM user_profiles WHERE is_verified = 1',
+        // Total requests today
+        "SELECT COUNT(*) as total_requests_today FROM user_requests WHERE DATE(created_at) = DATE('now')",
+        // Unique visitors today
+        "SELECT COUNT(DISTINCT ip_address) as unique_visitors_today FROM user_requests WHERE DATE(created_at) = DATE('now')",
         // Device statistics
         'SELECT device_type, COUNT(*) as count FROM users GROUP BY device_type',
         // Browser statistics
@@ -1836,7 +1871,11 @@ app.get('/api/admin/statistics', (req, res) => {
         // OS statistics
         'SELECT os, COUNT(*) as count FROM users GROUP BY os',
         // Language statistics
-        'SELECT language_code, COUNT(*) as count FROM users WHERE language_code IS NOT NULL GROUP BY language_code'
+        'SELECT language_code, COUNT(*) as count FROM users WHERE language_code IS NOT NULL GROUP BY language_code',
+        // Top endpoints
+        'SELECT endpoint, COUNT(*) as count FROM user_requests GROUP BY endpoint ORDER BY count DESC LIMIT 10',
+        // Hourly activity (last 24 hours)
+        "SELECT strftime('%H', created_at) as hour, COUNT(*) as count FROM user_requests WHERE created_at > datetime('now', '-24 hours') GROUP BY hour ORDER BY hour"
     ];
     
     Promise.all(queries.map(query => 
@@ -1853,10 +1892,14 @@ app.get('/api/admin/statistics', (req, res) => {
             activeUsers,
             premiumUsers,
             verifiedUsers,
+            totalRequestsToday,
+            uniqueVisitorsToday,
             deviceStats,
             browserStats,
             osStats,
-            languageStats
+            languageStats,
+            topEndpoints,
+            hourlyActivity
         ] = results;
         
         res.json({
@@ -1865,12 +1908,16 @@ app.get('/api/admin/statistics', (req, res) => {
                 new_users_today: newUsersToday[0].new_users_today,
                 active_users: activeUsers[0].active_users,
                 premium_users: premiumUsers[0].premium_users,
-                verified_users: verifiedUsers[0].verified_users
+                verified_users: verifiedUsers[0].verified_users,
+                total_requests_today: totalRequestsToday[0].total_requests_today,
+                unique_visitors_today: uniqueVisitorsToday[0].unique_visitors_today
             },
             device_statistics: deviceStats,
             browser_statistics: browserStats,
             os_statistics: osStats,
-            language_statistics: languageStats
+            language_statistics: languageStats,
+            top_endpoints: topEndpoints,
+            hourly_activity: hourlyActivity
         });
     }).catch(err => {
         console.error('Error getting statistics:', err);
