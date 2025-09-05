@@ -172,6 +172,19 @@ function initializeDatabase() {
         INSERT OR IGNORE INTO admins (username, password) 
         VALUES ('sberiq', 'MTMxMTA4Um9tYQ==')
     `);
+    
+    // Update existing admin password to Base64 format
+    db.run(`
+        UPDATE admins 
+        SET password = 'MTMxMTA4Um9tYQ==' 
+        WHERE username = 'sberiq' AND password LIKE '$2a$%'
+    `, (err) => {
+        if (err) {
+            console.error('Error updating admin password:', err);
+        } else {
+            console.log('Admin password updated to Base64 format');
+        }
+    });
 }
 
 // Helper function to calculate average rating
