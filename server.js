@@ -1925,6 +1925,68 @@ app.get('/api/admin/statistics', (req, res) => {
     });
 });
 
+// Link admin with Telegram user ID
+app.post('/api/admin/link-telegram', (req, res) => {
+    const { adminId, telegramId } = req.body;
+    
+    if (!adminId || !telegramId) {
+        res.status(400).json({ error: 'Missing adminId or telegramId' });
+        return;
+    }
+    
+    const query = `
+        UPDATE admins 
+        SET telegram_user_id = ?
+        WHERE id = ?
+    `;
+    
+    db.run(query, [telegramId, adminId], function(err) {
+        if (err) {
+            console.error('Error linking admin with Telegram ID:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (this.changes === 0) {
+            res.status(404).json({ error: 'Admin not found' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'Admin linked with Telegram ID successfully' });
+    });
+});
+
+// Unlink admin from Telegram user ID
+app.post('/api/admin/unlink-telegram', (req, res) => {
+    const { adminId } = req.body;
+    
+    if (!adminId) {
+        res.status(400).json({ error: 'Missing adminId' });
+        return;
+    }
+    
+    const query = `
+        UPDATE admins 
+        SET telegram_user_id = NULL
+        WHERE id = ?
+    `;
+    
+    db.run(query, [adminId], function(err) {
+        if (err) {
+            console.error('Error unlinking admin from Telegram ID:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (this.changes === 0) {
+            res.status(404).json({ error: 'Admin not found' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'Admin unlinked from Telegram ID successfully' });
+    });
+});
+
 // Admin login
 app.post('/api/admin/login', (req, res) => {
     const { username, password } = req.body;

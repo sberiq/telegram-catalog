@@ -1409,9 +1409,27 @@ function displayAdminAdmins(admins) {
                     <div class="admin-item-title">${escapeHtml(admin.username)}</div>
                     <div class="admin-item-details">ID: ${admin.id}</div>
                     <div class="admin-item-details">Создан: ${formatDate(admin.created_at)}</div>
+                    <div class="admin-item-details">
+                        Telegram ID: ${admin.telegram_user_id ? admin.telegram_user_id : 'Не привязан'}
+                    </div>
                     <span class="admin-item-status approved">Админ</span>
                 </div>
                 <div class="admin-item-actions">
+                    ${admin.telegram_user_id ? `
+                        <button class="admin-action-btn unlink" onclick="unlinkAdminTelegram(${admin.id})" title="Отвязать Telegram ID">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                        </button>
+                    ` : `
+                        <button class="admin-action-btn link" onclick="linkAdminTelegram(${admin.id})" title="Привязать Telegram ID">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                        </button>
+                    `}
                     <button class="admin-action-btn delete" onclick="deleteAdmin(${admin.id})" title="Удалить админа">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="3,6 5,6 21,6"></polyline>
@@ -1813,6 +1831,69 @@ async function unverifyUser(userId) {
     } catch (error) {
         console.error('Error unverifying user:', error);
         showError('Ошибка снятия верификации');
+    }
+}
+
+// Admin Telegram ID management functions
+async function linkAdminTelegram(adminId) {
+    const telegramId = prompt('Введите Telegram ID пользователя:');
+    
+    if (!telegramId || isNaN(telegramId)) {
+        showError('Введите корректный Telegram ID');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/admin/link-telegram', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                adminId: adminId,
+                telegramId: parseInt(telegramId)
+            })
+        });
+        
+        if (response.ok) {
+            showSuccess('Telegram ID успешно привязан к админу');
+            loadAdminAdmins(); // Reload admins list
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Ошибка привязки Telegram ID');
+        }
+    } catch (error) {
+        console.error('Error linking admin Telegram ID:', error);
+        showError('Ошибка привязки Telegram ID');
+    }
+}
+
+async function unlinkAdminTelegram(adminId) {
+    if (!confirm('Вы уверены, что хотите отвязать Telegram ID от этого админа?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/admin/unlink-telegram', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                adminId: adminId
+            })
+        });
+        
+        if (response.ok) {
+            showSuccess('Telegram ID успешно отвязан от админа');
+            loadAdminAdmins(); // Reload admins list
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Ошибка отвязки Telegram ID');
+        }
+    } catch (error) {
+        console.error('Error unlinking admin Telegram ID:', error);
+        showError('Ошибка отвязки Telegram ID');
     }
 }
 
