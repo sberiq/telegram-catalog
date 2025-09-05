@@ -68,6 +68,51 @@ function initializeDatabase() {
         )
     `);
 
+    // Create user_profiles table
+    db.run(`
+        CREATE TABLE IF NOT EXISTS user_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER UNIQUE NOT NULL,
+            nickname TEXT,
+            bio TEXT,
+            avatar_url TEXT,
+            is_verified BOOLEAN DEFAULT 0,
+            verified_by INTEGER,
+            verified_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (verified_by) REFERENCES admins (id)
+        )
+    `);
+
+    // Create user_favorite_channels table
+    db.run(`
+        CREATE TABLE IF NOT EXISTS user_favorite_channels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            channel_id INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (channel_id) REFERENCES channels (id),
+            UNIQUE(user_id, channel_id)
+        )
+    `);
+
+    // Create channel_admins table
+    db.run(`
+        CREATE TABLE IF NOT EXISTS channel_admins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            channel_id INTEGER NOT NULL,
+            admin_user_id INTEGER NOT NULL,
+            role TEXT DEFAULT 'admin',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (channel_id) REFERENCES channels (id),
+            FOREIGN KEY (admin_user_id) REFERENCES users (id),
+            UNIQUE(channel_id, admin_user_id)
+        )
+    `);
+
     // Update channels table to include user_id
     db.run(`
         ALTER TABLE channels ADD COLUMN user_id INTEGER
@@ -1080,9 +1125,10 @@ app.get('/api/user/me', (req, res) => {
     }
     
     const query = `
-        SELECT u.*, us.session_token
+        SELECT u.*, us.session_token, up.nickname, up.bio, up.avatar_url, up.is_verified
         FROM users u
         JOIN user_sessions us ON u.id = us.user_id
+        LEFT JOIN user_profiles up ON u.id = up.user_id
         WHERE us.session_token = ?
         ORDER BY us.created_at DESC
         LIMIT 1
@@ -1106,12 +1152,336 @@ app.get('/api/user/me', (req, res) => {
             first_name: user.first_name,
             last_name: user.last_name,
             language_code: user.language_code,
-            is_premium: user.is_premium
+            is_premium: user.is_premium,
+            nickname: user.nickname,
+            bio: user.bio,
+            avatar_url: user.avatar_url,
+            is_verified: user.is_verified || false
+        });
+    });
+});
+
+// Get user profile by ID
+app.get('/api/user/:userId/profile', (req, res) => {
+    const userId = req.params.userId;
+    
+    const query = `
+        SELECT u.*, up.nickname, up.bio, up.avatar_url, up.is_verified, up.verified_at,
+               COUNT(DISTINCT r.id) as reviews_count,
+               COUNT(DISTINCT fc.channel_id) as favorite_channels_count
+        FROM users u
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        LEFT JOIN reviews r ON u.id = r.user_id AND r.status = 'approved'
+        LEFT JOIN user_favorite_channels fc ON u.id = fc.user_id
+        WHERE u.telegram_id = ?
+        GROUP BY u.id
+    `;
+    
+    db.get(query, [userId], (err, user) => {
+        if (err) {
+            console.error('Error getting user profile:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        
+        res.json({
+            id: user.telegram_id,
+            username: user.username,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            nickname: user.nickname,
+            bio: user.bio,
+            avatar_url: user.avatar_url,
+            is_verified: user.is_verified || false,
+            verified_at: user.verified_at,
+            reviews_count: user.reviews_count || 0,
+            favorite_channels_count: user.favorite_channels_count || 0,
+            created_at: user.created_at
+        });
+    });
+});
+
+// Get user reviews
+app.get('/api/user/:userId/reviews', (req, res) => {
+    const userId = req.params.userId;
+    
+    const query = `
+        SELECT r.*, c.title as channel_title, c.link as channel_link
+        FROM reviews r
+        JOIN channels c ON r.channel_id = c.id
+        WHERE r.user_id = (SELECT id FROM users WHERE telegram_id = ?) AND r.status = 'approved'
+        ORDER BY r.created_at DESC
+    `;
+    
+    db.all(query, [userId], (err, reviews) => {
+        if (err) {
+            console.error('Error getting user reviews:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        res.json(reviews);
+    });
+});
+
+// Get user favorite channels
+app.get('/api/user/:userId/favorites', (req, res) => {
+    const userId = req.params.userId;
+    
+    const query = `
+        SELECT c.*, COALESCE(AVG(r.rating), 5) as avg_rating, COUNT(r.id) as review_count
+        FROM user_favorite_channels fc
+        JOIN channels c ON fc.channel_id = c.id
+        LEFT JOIN reviews r ON c.id = r.channel_id AND r.status = 'approved'
+        WHERE fc.user_id = (SELECT id FROM users WHERE telegram_id = ?) AND c.status = 'approved'
+        GROUP BY c.id
+        ORDER BY fc.created_at DESC
+    `;
+    
+    db.all(query, [userId], (err, channels) => {
+        if (err) {
+            console.error('Error getting user favorites:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        const channelsWithStars = channels.map(channel => ({
+            ...channel,
+            avg_rating: Math.round(channel.avg_rating * 10) / 10,
+            stars: generateStars(channel.avg_rating)
+        }));
+        
+        res.json(channelsWithStars);
+    });
+});
+
+// Update user profile
+app.put('/api/user/profile', (req, res) => {
+    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    const { nickname, bio, avatar_url } = req.body;
+    
+    if (!sessionToken) {
+        res.status(401).json({ error: 'No session token provided' });
+        return;
+    }
+    
+    // First get user ID
+    const userQuery = `
+        SELECT u.id FROM users u
+        JOIN user_sessions us ON u.id = us.user_id
+        WHERE us.session_token = ?
+        ORDER BY us.created_at DESC
+        LIMIT 1
+    `;
+    
+    db.get(userQuery, [sessionToken], (err, user) => {
+        if (err || !user) {
+            res.status(401).json({ error: 'Invalid session' });
+            return;
+        }
+        
+        // Update or insert profile
+        const profileQuery = `
+            INSERT OR REPLACE INTO user_profiles 
+            (user_id, nickname, bio, avatar_url, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `;
+        
+        db.run(profileQuery, [user.id, nickname, bio, avatar_url], function(err) {
+            if (err) {
+                console.error('Error updating profile:', err);
+                res.status(500).json({ error: 'Database error' });
+                return;
+            }
+            
+            res.json({ success: true, message: 'Profile updated successfully' });
+        });
+    });
+});
+
+// Add/remove favorite channel
+app.post('/api/user/favorites/:channelId', (req, res) => {
+    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    const channelId = req.params.channelId;
+    
+    if (!sessionToken) {
+        res.status(401).json({ error: 'No session token provided' });
+        return;
+    }
+    
+    // Get user ID
+    const userQuery = `
+        SELECT u.id FROM users u
+        JOIN user_sessions us ON u.id = us.user_id
+        WHERE us.session_token = ?
+        ORDER BY us.created_at DESC
+        LIMIT 1
+    `;
+    
+    db.get(userQuery, [sessionToken], (err, user) => {
+        if (err || !user) {
+            res.status(401).json({ error: 'Invalid session' });
+            return;
+        }
+        
+        // Check if already favorite
+        const checkQuery = 'SELECT id FROM user_favorite_channels WHERE user_id = ? AND channel_id = ?';
+        db.get(checkQuery, [user.id, channelId], (err, existing) => {
+            if (err) {
+                res.status(500).json({ error: 'Database error' });
+                return;
+            }
+            
+            if (existing) {
+                // Remove from favorites
+                const deleteQuery = 'DELETE FROM user_favorite_channels WHERE user_id = ? AND channel_id = ?';
+                db.run(deleteQuery, [user.id, channelId], (err) => {
+                    if (err) {
+                        res.status(500).json({ error: 'Database error' });
+                        return;
+                    }
+                    res.json({ success: true, message: 'Removed from favorites', is_favorite: false });
+                });
+            } else {
+                // Add to favorites
+                const insertQuery = 'INSERT INTO user_favorite_channels (user_id, channel_id) VALUES (?, ?)';
+                db.run(insertQuery, [user.id, channelId], (err) => {
+                    if (err) {
+                        res.status(500).json({ error: 'Database error' });
+                        return;
+                    }
+                    res.json({ success: true, message: 'Added to favorites', is_favorite: true });
+                });
+            }
         });
     });
 });
 
 // Admin API Routes
+
+// Verify user
+app.post('/api/admin/users/:userId/verify', (req, res) => {
+    const userId = req.params.userId;
+    
+    const query = `
+        UPDATE user_profiles 
+        SET is_verified = 1, verified_at = CURRENT_TIMESTAMP, verified_by = 1
+        WHERE user_id = (SELECT id FROM users WHERE telegram_id = ?)
+    `;
+    
+    db.run(query, [userId], function(err) {
+        if (err) {
+            console.error('Error verifying user:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (this.changes === 0) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'User verified successfully' });
+    });
+});
+
+// Unverify user
+app.post('/api/admin/users/:userId/unverify', (req, res) => {
+    const userId = req.params.userId;
+    
+    const query = `
+        UPDATE user_profiles 
+        SET is_verified = 0, verified_at = NULL, verified_by = NULL
+        WHERE user_id = (SELECT id FROM users WHERE telegram_id = ?)
+    `;
+    
+    db.run(query, [userId], function(err) {
+        if (err) {
+            console.error('Error unverifying user:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'User unverified successfully' });
+    });
+});
+
+// Add channel admin
+app.post('/api/admin/channels/:channelId/admins', (req, res) => {
+    const channelId = req.params.channelId;
+    const { adminUserId } = req.body;
+    
+    if (!adminUserId) {
+        res.status(400).json({ error: 'Admin user ID required' });
+        return;
+    }
+    
+    const query = `
+        INSERT OR IGNORE INTO channel_admins (channel_id, admin_user_id)
+        VALUES (?, (SELECT id FROM users WHERE telegram_id = ?))
+    `;
+    
+    db.run(query, [channelId, adminUserId], function(err) {
+        if (err) {
+            console.error('Error adding channel admin:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'Channel admin added successfully' });
+    });
+});
+
+// Remove channel admin
+app.delete('/api/admin/channels/:channelId/admins/:adminUserId', (req, res) => {
+    const channelId = req.params.channelId;
+    const adminUserId = req.params.adminUserId;
+    
+    const query = `
+        DELETE FROM channel_admins 
+        WHERE channel_id = ? AND admin_user_id = (SELECT id FROM users WHERE telegram_id = ?)
+    `;
+    
+    db.run(query, [channelId, adminUserId], function(err) {
+        if (err) {
+            console.error('Error removing channel admin:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'Channel admin removed successfully' });
+    });
+});
+
+// Get channel admins
+app.get('/api/channels/:channelId/admins', (req, res) => {
+    const channelId = req.params.channelId;
+    
+    const query = `
+        SELECT u.telegram_id, u.username, u.first_name, u.last_name, 
+               up.nickname, up.avatar_url, up.is_verified, ca.role, ca.created_at
+        FROM channel_admins ca
+        JOIN users u ON ca.admin_user_id = u.id
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        WHERE ca.channel_id = ?
+        ORDER BY ca.created_at ASC
+    `;
+    
+    db.all(query, [channelId], (err, admins) => {
+        if (err) {
+            console.error('Error getting channel admins:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        res.json(admins);
+    });
+});
 
 // Admin login
 app.post('/api/admin/login', (req, res) => {

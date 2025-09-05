@@ -18,16 +18,18 @@
                 </div>
                 <div class="header-right">
                     <div id="userStatus" class="user-status hidden">
-                        <div class="user-info">
+                        <button class="profile-btn" onclick="showProfileModal()" id="profileBtn">
+                            <img id="userAvatar" src="" alt="Avatar" class="user-avatar">
                             <span id="userName" class="user-name"></span>
-                            <button id="logoutBtn" class="logout-btn" onclick="logoutUser()" title="Выйти">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                                    <polyline points="16,17 21,12 16,7"></polyline>
-                                    <line x1="21" y1="12" x2="9" y2="12"></line>
-                                </svg>
-                            </button>
-                        </div>
+                            <span class="verified-badge hidden" id="verifiedBadge">✓</span>
+                        </button>
+                        <button id="logoutBtn" class="logout-btn" onclick="logoutUser()" title="Выйти">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16,17 21,12 16,7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                        </button>
                     </div>
                     <button id="loginBtn" class="login-btn" onclick="showLoginModal()" title="Войти через Telegram">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -368,6 +370,66 @@
                                 data-request-access="write">
                         </script>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profileModal" class="modal hidden">
+        <div class="modal-content profile-modal">
+            <div class="modal-header">
+                <h3>Мой профиль</h3>
+                <button class="close-btn" onclick="closeProfileModal()">&times;</button>
+            </div>
+            <div class="profile-content">
+                <div class="profile-header">
+                    <div class="profile-avatar-section">
+                        <img id="profileAvatar" src="" alt="Avatar" class="profile-avatar">
+                        <button class="edit-avatar-btn" onclick="editAvatar()">Изменить</button>
+                    </div>
+                    <div class="profile-info">
+                        <h4 id="profileName"></h4>
+                        <p id="profileUsername"></p>
+                        <p id="profileId"></p>
+                        <span class="verified-badge hidden" id="profileVerifiedBadge">✓ Верифицирован</span>
+                    </div>
+                </div>
+                
+                <div class="profile-stats">
+                    <div class="stat-item">
+                        <span class="stat-number" id="reviewsCount">0</span>
+                        <span class="stat-label">Отзывов</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="favoritesCount">0</span>
+                        <span class="stat-label">Избранных</span>
+                    </div>
+                </div>
+
+                <div class="profile-sections">
+                    <div class="profile-section">
+                        <h5>О себе</h5>
+                        <textarea id="profileBio" placeholder="Расскажите о себе..." rows="3"></textarea>
+                    </div>
+                    
+                    <div class="profile-section">
+                        <h5>Мои отзывы</h5>
+                        <div id="userReviews" class="user-reviews-list">
+                            <!-- Reviews will be loaded here -->
+                        </div>
+                    </div>
+                    
+                    <div class="profile-section">
+                        <h5>Избранные каналы</h5>
+                        <div id="favoriteChannels" class="favorite-channels-list">
+                            <!-- Favorite channels will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="profile-actions">
+                    <button class="save-profile-btn" onclick="saveProfile()">Сохранить изменения</button>
                 </div>
             </div>
         </div>

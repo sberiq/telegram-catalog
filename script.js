@@ -88,13 +88,33 @@ function updateAuthUI() {
     const loginBtn = document.getElementById('loginBtn');
     const userStatus = document.getElementById('userStatus');
     const userName = document.getElementById('userName');
+    const userAvatar = document.getElementById('userAvatar');
+    const verifiedBadge = document.getElementById('verifiedBadge');
     
     if (isUserAuthenticated()) {
         console.log('User is authenticated, updating UI...');
         // User is logged in
         loginBtn.style.display = 'none';
         userStatus.classList.remove('hidden');
-        userName.textContent = currentUser.first_name + (currentUser.last_name ? ' ' + currentUser.last_name : '');
+        
+        // Update user info
+        const displayName = currentUser.nickname || currentUser.first_name + (currentUser.last_name ? ' ' + currentUser.last_name : '');
+        userName.textContent = displayName;
+        
+        // Update avatar
+        if (currentUser.avatar_url) {
+            userAvatar.src = currentUser.avatar_url;
+        } else {
+            // Use Telegram avatar or default
+            userAvatar.src = `https://t.me/i/userpic/320/${currentUser.id}.jpg` || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiM2MzY2RjEiLz4KPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI4IiB5PSI4Ij4KPHBhdGggZD0iTTggMEE4IDggMCAxIDEgOCAxNkE4IDggMCAxIDEgOCAwWiIgZmlsbD0iI0ZGRiIvPgo8cGF0aCBkPSJNOCA0QzEwLjIwOTEgNCAxMiA1Ljc5MDg2IDEyIDhDMTIgMTAuMjA5MSAxMC4yMDkxIDEyIDggMTJDNS43OTA4NiAxMiA0IDEwLjIwOTEgNCA4QzQgNS43OTA4NiA1Ljc5MDg2IDQgOCA0WiIgZmlsbD0iIzYzNjZGMSIvPgo8L3N2Zz4KPC9zdmc+';
+        }
+        
+        // Show verified badge if user is verified
+        if (currentUser.is_verified) {
+            verifiedBadge.classList.remove('hidden');
+        } else {
+            verifiedBadge.classList.add('hidden');
+        }
         
         // Enable auth-required elements
         document.querySelectorAll('.auth-required').forEach(el => {
@@ -1656,3 +1676,192 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update auth UI
     updateAuthUI();
 });
+
+// Profile Functions
+function showProfileModal() {
+    if (!isUserAuthenticated()) {
+        showLoginModal();
+        return;
+    }
+    
+    loadProfileData();
+    document.getElementById('profileModal').classList.remove('hidden');
+}
+
+function closeProfileModal() {
+    document.getElementById('profileModal').classList.add('hidden');
+}
+
+async function loadProfileData() {
+    try {
+        const [profileResponse, reviewsResponse, favoritesResponse] = await Promise.all([
+            fetch(`/api/user/${currentUser.id}/profile`),
+            fetch(`/api/user/${currentUser.id}/reviews`),
+            fetch(`/api/user/${currentUser.id}/favorites`)
+        ]);
+        
+        const profile = await profileResponse.json();
+        const reviews = await reviewsResponse.json();
+        const favorites = await favoritesResponse.json();
+        
+        // Update profile info
+        document.getElementById('profileName').textContent = profile.nickname || profile.first_name + (profile.last_name ? ' ' + profile.last_name : '');
+        document.getElementById('profileUsername').textContent = profile.username ? `@${profile.username}` : 'Без username';
+        document.getElementById('profileId').textContent = `ID: ${profile.id}`;
+        document.getElementById('profileBio').value = profile.bio || '';
+        
+        // Update avatar
+        const profileAvatar = document.getElementById('profileAvatar');
+        if (profile.avatar_url) {
+            profileAvatar.src = profile.avatar_url;
+        } else {
+            profileAvatar.src = `https://t.me/i/userpic/320/${profile.id}.jpg` || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iNDAiIGN5PSI0MCIgcj0iNDAiIGZpbGw9IiM2MzY2RjEiLz4KPHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSIyMCIgeT0iMjAiPgo8cGF0aCBkPSJNMjAgMEMzMS4wNDU3IDAgNDAgOC45NTQzIDQwIDIwQzQwIDMxLjA0NTcgMzEuMDQ1NyA0MCAyMCA0MEM4Ljk1NDMgNDAgMCAzMS4wNDU3IDAgMjBDMCA4Ljk1NDMgOC45NTQzIDAgMjAgMFoiIGZpbGw9IiNGRkYiLz4KPHBhdGggZD0iTTIwIDEwQzI1LjUyMjggMTAgMzAgMTQuNDc3MiAzMCAyMEMzMCAyNS41MjI4IDI1LjUyMjggMzAgMjAgMzBDMTQuNDc3MiAzMCAxMCAyNS41MjI4IDEwIDIwQzEwIDE0LjQ3NzIgMTQuNDc3MiAxMCAyMCAxMFoiIGZpbGw9IiM2MzY2RjEiLz4KPC9zdmc+Cjwvc3ZnPg==';
+        }
+        
+        // Show verified badge
+        const profileVerifiedBadge = document.getElementById('profileVerifiedBadge');
+        if (profile.is_verified) {
+            profileVerifiedBadge.classList.remove('hidden');
+        } else {
+            profileVerifiedBadge.classList.add('hidden');
+        }
+        
+        // Update stats
+        document.getElementById('reviewsCount').textContent = profile.reviews_count || 0;
+        document.getElementById('favoritesCount').textContent = profile.favorite_channels_count || 0;
+        
+        // Load reviews
+        displayUserReviews(reviews);
+        
+        // Load favorites
+        displayFavoriteChannels(favorites);
+        
+    } catch (error) {
+        console.error('Error loading profile data:', error);
+        showError('Ошибка загрузки профиля');
+    }
+}
+
+function displayUserReviews(reviews) {
+    const container = document.getElementById('userReviews');
+    
+    if (reviews.length === 0) {
+        container.innerHTML = '<p style="color: #9ca3af; text-align: center; padding: 20px;">Пока нет отзывов</p>';
+        return;
+    }
+    
+    container.innerHTML = reviews.map(review => `
+        <div class="user-review-item">
+            <a href="#" onclick="showChannelDetails(${review.channel_id})" class="review-channel-link">
+                ${review.channel_title}
+            </a>
+            <div class="review-rating">
+                <span class="stars">${generateStars(review.rating)}</span>
+                <span class="rating-value">${review.rating}/5</span>
+            </div>
+            <div class="review-text">${review.comment || 'Без комментария'}</div>
+            <div class="review-date">${new Date(review.created_at).toLocaleDateString('ru-RU')}</div>
+        </div>
+    `).join('');
+}
+
+function displayFavoriteChannels(favorites) {
+    const container = document.getElementById('favoriteChannels');
+    
+    if (favorites.length === 0) {
+        container.innerHTML = '<p style="color: #9ca3af; text-align: center; padding: 20px;">Нет избранных каналов</p>';
+        return;
+    }
+    
+    container.innerHTML = favorites.map(channel => `
+        <div class="favorite-channel-item">
+            <div class="favorite-channel-info">
+                <h6>${channel.title}</h6>
+                <p>${channel.subscribers || 'Неизвестно'} подписчиков • ${channel.avg_rating}/5 ${channel.stars}</p>
+            </div>
+            <button class="remove-favorite-btn" onclick="toggleFavorite(${channel.id})" title="Удалить из избранного">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+            </button>
+        </div>
+    `).join('');
+}
+
+async function saveProfile() {
+    const bio = document.getElementById('profileBio').value;
+    
+    try {
+        const response = await fetch('/api/user/profile', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionToken}`
+            },
+            body: JSON.stringify({
+                nickname: currentUser.nickname,
+                bio: bio,
+                avatar_url: currentUser.avatar_url
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showSuccess('Профиль сохранен!');
+            // Update current user data
+            currentUser.bio = bio;
+            updateAuthUI();
+        } else {
+            showError(result.error || 'Ошибка сохранения профиля');
+        }
+    } catch (error) {
+        console.error('Error saving profile:', error);
+        showError('Ошибка сохранения профиля');
+    }
+}
+
+function editAvatar() {
+    // Simple avatar editing - just show a message for now
+    showInfo('Функция изменения аватара будет добавлена позже');
+}
+
+async function toggleFavorite(channelId) {
+    if (!isUserAuthenticated()) {
+        showLoginModal();
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/user/favorites/${channelId}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${sessionToken}`
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            if (result.is_favorite) {
+                showSuccess('Добавлено в избранное');
+            } else {
+                showSuccess('Удалено из избранного');
+                // Reload favorites
+                loadProfileData();
+            }
+        } else {
+            showError(result.error || 'Ошибка изменения избранного');
+        }
+    } catch (error) {
+        console.error('Error toggling favorite:', error);
+        showError('Ошибка изменения избранного');
+    }
+}
+
+// Show user profile by ID (for viewing other users' profiles)
+function showUserProfile(userId) {
+    // This would open a read-only profile view
+    // For now, just show a message
+    showInfo(`Просмотр профиля пользователя ${userId} будет добавлен позже`);
+}
