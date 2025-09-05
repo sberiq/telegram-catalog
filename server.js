@@ -213,6 +213,40 @@ function initializeDatabase() {
         }
     });
 
+    // Update channels table to include status and rejection_reason
+    db.run(`
+        ALTER TABLE channels ADD COLUMN status TEXT DEFAULT 'pending'
+    `, (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Error adding status to channels:', err);
+        }
+    });
+
+    db.run(`
+        ALTER TABLE channels ADD COLUMN rejection_reason TEXT
+    `, (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Error adding rejection_reason to channels:', err);
+        }
+    });
+
+    // Update reviews table to include status and rejection_reason
+    db.run(`
+        ALTER TABLE reviews ADD COLUMN status TEXT DEFAULT 'pending'
+    `, (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Error adding status to reviews:', err);
+        }
+    });
+
+    db.run(`
+        ALTER TABLE reviews ADD COLUMN rejection_reason TEXT
+    `, (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Error adding rejection_reason to reviews:', err);
+        }
+    });
+
     // Update tags table to include user_id
     db.run(`
         ALTER TABLE tags ADD COLUMN user_id INTEGER
@@ -2113,9 +2147,18 @@ app.post('/api/admin/login', (req, res) => {
 
 // Get all channels for admin
 app.get('/api/admin/channels', (req, res) => {
-    const query = 'SELECT * FROM channels ORDER BY created_at DESC';
+    const status = req.query.status;
+    let query = 'SELECT * FROM channels';
+    let params = [];
     
-    db.all(query, [], (err, rows) => {
+    if (status) {
+        query += ' WHERE status = ?';
+        params.push(status);
+    }
+    
+    query += ' ORDER BY created_at DESC';
+    
+    db.all(query, params, (err, rows) => {
         if (err) {
             console.error('Error fetching admin channels:', err);
             res.status(500).json({ error: 'Database error' });
@@ -2128,14 +2171,22 @@ app.get('/api/admin/channels', (req, res) => {
 
 // Get all reviews for admin
 app.get('/api/admin/reviews', (req, res) => {
-    const query = `
+    const status = req.query.status;
+    let query = `
         SELECT r.*, c.title as channel_title 
         FROM reviews r 
-        LEFT JOIN channels c ON r.channel_id = c.id 
-        ORDER BY r.created_at DESC
+        LEFT JOIN channels c ON r.channel_id = c.id
     `;
+    let params = [];
     
-    db.all(query, [], (err, rows) => {
+    if (status) {
+        query += ' WHERE r.status = ?';
+        params.push(status);
+    }
+    
+    query += ' ORDER BY r.created_at DESC';
+    
+    db.all(query, params, (err, rows) => {
         if (err) {
             console.error('Error fetching admin reviews:', err);
             res.status(500).json({ error: 'Database error' });
@@ -2773,6 +2824,56 @@ app.delete('/api/reviews/:reviewId/like', (req, res) => {
                 });
             });
         });
+    });
+});
+
+// Reject channel
+app.post('/api/admin/channels/:id/reject', (req, res) => {
+    const channelId = req.params.id;
+    const { reason } = req.body;
+    
+    const query = 'UPDATE channels SET status = ?, rejection_reason = ? WHERE id = ?';
+    db.run(query, ['rejected', reason || 'Отклонен администратором', channelId], function(err) {
+        if (err) {
+            console.error('Error rejecting channel:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'Channel rejected' });
+    });
+});
+
+// Approve review
+app.post('/api/admin/reviews/:id/approve', (req, res) => {
+    const reviewId = req.params.id;
+    
+    const query = 'UPDATE reviews SET status = ? WHERE id = ?';
+    db.run(query, ['approved', reviewId], function(err) {
+        if (err) {
+            console.error('Error approving review:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'Review approved' });
+    });
+});
+
+// Reject review
+app.post('/api/admin/reviews/:id/reject', (req, res) => {
+    const reviewId = req.params.id;
+    const { reason } = req.body;
+    
+    const query = 'UPDATE reviews SET status = ?, rejection_reason = ? WHERE id = ?';
+    db.run(query, ['rejected', reason || 'Отклонен администратором', reviewId], function(err) {
+        if (err) {
+            console.error('Error rejecting review:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        res.json({ success: true, message: 'Review rejected' });
     });
 });
 

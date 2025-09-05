@@ -613,6 +613,13 @@ function displayChannelDetails(channel) {
                     </div>
                     
                     <div class="review-form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="anonymousReview" class="form-checkbox">
+                            <span class="checkbox-text">Оставить отзыв анонимно</span>
+                        </label>
+                    </div>
+                    
+                    <div class="review-form-group">
                         <p class="user-info-display" id="userInfoDisplay">
                             Отзыв будет добавлен от вашего имени в Telegram
                         </p>
@@ -626,6 +633,16 @@ function displayChannelDetails(channel) {
     
     // Add form submit handler
     document.getElementById('addReviewForm').addEventListener('submit', handleAddReview);
+    
+    // Add anonymous review checkbox handler
+    document.getElementById('anonymousReview').addEventListener('change', function() {
+        const userInfoDisplay = document.getElementById('userInfoDisplay');
+        if (this.checked) {
+            userInfoDisplay.textContent = 'Отзыв будет добавлен анонимно';
+        } else {
+            userInfoDisplay.textContent = 'Отзыв будет добавлен от вашего имени в Telegram';
+        }
+    });
 }
 
 // Add channel functionality
@@ -694,7 +711,8 @@ async function handleAddReview(e) {
     
     const reviewData = {
         text: document.getElementById('reviewText').value,
-        rating: selectedRating
+        rating: selectedRating,
+        is_anonymous: document.getElementById('anonymousReview').checked
     };
     
     try {
@@ -925,8 +943,14 @@ function showAdminTab(tab) {
         case 'channels':
             loadAdminChannels();
             break;
+        case 'channels-moderation':
+            loadAdminChannelsModeration();
+            break;
         case 'reviews':
             loadAdminReviews();
+            break;
+        case 'reviews-moderation':
+            loadAdminReviewsModeration();
             break;
         case 'tags':
             loadAdminTags();
@@ -1431,6 +1455,102 @@ function displayAdminAdmins(admins) {
             </div>
         `).join('')}
     `;
+}
+
+// Load channels pending moderation
+async function loadAdminChannelsModeration() {
+    try {
+        const response = await fetch('/api/admin/channels?status=pending');
+        const channels = await response.json();
+        displayAdminChannelsModeration(channels);
+    } catch (error) {
+        console.error('Error loading channels for moderation:', error);
+        showError('Ошибка загрузки каналов на модерации');
+    }
+}
+
+function displayAdminChannelsModeration(channels) {
+    const content = document.getElementById('adminContent');
+    
+    if (channels.length === 0) {
+        content.innerHTML = '<div class="no-data">Нет каналов на модерации</div>';
+        return;
+    }
+    
+    content.innerHTML = channels.map(channel => `
+        <div class="admin-item">
+            <div class="admin-item-info">
+                <div class="admin-item-title">${escapeHtml(channel.title)}</div>
+                <div class="admin-item-details">${escapeHtml(channel.description)}</div>
+                <div class="admin-item-details">
+                    <a href="${channel.link}" target="_blank" class="channel-link">${channel.link}</a>
+                </div>
+                <div class="admin-item-details">Добавлен: ${formatDate(channel.created_at)}</div>
+                <div class="admin-item-details">Автор: ${channel.user_id ? `ID: ${channel.user_id}` : 'Анонимно'}</div>
+                <span class="admin-item-status pending">На модерации</span>
+            </div>
+            <div class="admin-item-actions">
+                <button class="admin-action-btn approve" onclick="approveChannel(${channel.id})" title="Одобрить">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20,6 9,17 4,12"></polyline>
+                    </svg>
+                </button>
+                <button class="admin-action-btn reject" onclick="rejectChannel(${channel.id})" title="Отклонить">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Load reviews pending moderation
+async function loadAdminReviewsModeration() {
+    try {
+        const response = await fetch('/api/admin/reviews?status=pending');
+        const reviews = await response.json();
+        displayAdminReviewsModeration(reviews);
+    } catch (error) {
+        console.error('Error loading reviews for moderation:', error);
+        showError('Ошибка загрузки отзывов на модерации');
+    }
+}
+
+function displayAdminReviewsModeration(reviews) {
+    const content = document.getElementById('adminContent');
+    
+    if (reviews.length === 0) {
+        content.innerHTML = '<div class="no-data">Нет отзывов на модерации</div>';
+        return;
+    }
+    
+    content.innerHTML = reviews.map(review => `
+        <div class="admin-item">
+            <div class="admin-item-info">
+                <div class="admin-item-title">Отзыв на канал: ${escapeHtml(review.channel_title)}</div>
+                <div class="admin-item-details">Автор: ${review.is_anonymous ? 'Анонимно' : (review.nickname || 'Пользователь')}</div>
+                <div class="admin-item-details">Оценка: ${generateStarsHTML(review.rating)}</div>
+                <div class="admin-item-details">${escapeHtml(review.text)}</div>
+                <div class="admin-item-details">Добавлен: ${formatDate(review.created_at)}</div>
+                <span class="admin-item-status pending">На модерации</span>
+            </div>
+            <div class="admin-item-actions">
+                <button class="admin-action-btn approve" onclick="approveReview(${review.id})" title="Одобрить">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20,6 9,17 4,12"></polyline>
+                    </svg>
+                </button>
+                <button class="admin-action-btn reject" onclick="rejectReview(${review.id})" title="Отклонить">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `).join('');
 }
 
 function openAddAdminModal() {
@@ -2380,5 +2500,118 @@ async function unlinkAdminFromUser() {
     } catch (error) {
         console.error('Error unlinking admin from user:', error);
         showError('Ошибка отвязывания админа от пользователя');
+    }
+}
+
+// Moderation functions
+async function approveChannel(channelId) {
+    if (!confirm('Вы уверены, что хотите одобрить этот канал?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/admin/channels/${channelId}/approve`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            showSuccess('Канал одобрен');
+            loadAdminChannelsModeration(); // Reload moderation list
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Ошибка одобрения канала');
+        }
+    } catch (error) {
+        console.error('Error approving channel:', error);
+        showError('Ошибка одобрения канала');
+    }
+}
+
+async function rejectChannel(channelId) {
+    const reason = prompt('Введите причину отклонения:');
+    
+    if (!reason) {
+        showError('Причина отклонения обязательна');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/admin/channels/${channelId}/reject`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ reason })
+        });
+        
+        if (response.ok) {
+            showSuccess('Канал отклонен');
+            loadAdminChannelsModeration(); // Reload moderation list
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Ошибка отклонения канала');
+        }
+    } catch (error) {
+        console.error('Error rejecting channel:', error);
+        showError('Ошибка отклонения канала');
+    }
+}
+
+async function approveReview(reviewId) {
+    if (!confirm('Вы уверены, что хотите одобрить этот отзыв?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/admin/reviews/${reviewId}/approve`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            showSuccess('Отзыв одобрен');
+            loadAdminReviewsModeration(); // Reload moderation list
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Ошибка одобрения отзыва');
+        }
+    } catch (error) {
+        console.error('Error approving review:', error);
+        showError('Ошибка одобрения отзыва');
+    }
+}
+
+async function rejectReview(reviewId) {
+    const reason = prompt('Введите причину отклонения:');
+    
+    if (!reason) {
+        showError('Причина отклонения обязательна');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/admin/reviews/${reviewId}/reject`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ reason })
+        });
+        
+        if (response.ok) {
+            showSuccess('Отзыв отклонен');
+            loadAdminReviewsModeration(); // Reload moderation list
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Ошибка отклонения отзыва');
+        }
+    } catch (error) {
+        console.error('Error rejecting review:', error);
+        showError('Ошибка отклонения отзыва');
     }
 }
