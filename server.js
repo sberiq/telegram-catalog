@@ -1068,6 +1068,49 @@ app.post('/api/channels/:id/reviews', (req, res) => {
     }
 });
 
+// User API Routes
+
+// Get current user info
+app.get('/api/user/me', (req, res) => {
+    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!sessionToken) {
+        res.status(401).json({ error: 'No session token provided' });
+        return;
+    }
+    
+    const query = `
+        SELECT u.*, us.session_token
+        FROM users u
+        JOIN user_sessions us ON u.id = us.user_id
+        WHERE us.session_token = ?
+        ORDER BY us.created_at DESC
+        LIMIT 1
+    `;
+    
+    db.get(query, [sessionToken], (err, user) => {
+        if (err) {
+            console.error('Error getting user info:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (!user) {
+            res.status(401).json({ error: 'Invalid session' });
+            return;
+        }
+        
+        res.json({
+            id: user.telegram_id,
+            username: user.username,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            language_code: user.language_code,
+            is_premium: user.is_premium
+        });
+    });
+});
+
 // Admin API Routes
 
 // Admin login

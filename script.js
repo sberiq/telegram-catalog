@@ -56,6 +56,10 @@ async function authenticateWithTelegramWidget(user) {
         
         if (response.ok) {
             console.log('Server authentication successful:', result);
+            // Force UI update after successful authentication
+            setTimeout(() => {
+                updateAuthUI();
+            }, 100);
         } else {
             console.error('Server authentication failed:', result.error);
         }
@@ -79,11 +83,14 @@ function isUserAuthenticated() {
 
 // Update UI based on authentication status
 function updateAuthUI() {
+    console.log('updateAuthUI called, currentUser:', currentUser, 'sessionToken:', sessionToken);
+    
     const loginBtn = document.getElementById('loginBtn');
     const userStatus = document.getElementById('userStatus');
     const userName = document.getElementById('userName');
     
     if (isUserAuthenticated()) {
+        console.log('User is authenticated, updating UI...');
         // User is logged in
         loginBtn.style.display = 'none';
         userStatus.classList.remove('hidden');
@@ -94,6 +101,7 @@ function updateAuthUI() {
             el.classList.remove('auth-required');
         });
     } else {
+        console.log('User is not authenticated, showing login button...');
         // User is not logged in
         loginBtn.style.display = 'flex';
         userStatus.classList.add('hidden');
