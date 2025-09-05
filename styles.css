@@ -2202,12 +2202,12 @@ body.main-page .info-instruction {
 
 .user-info h4 {
     margin: 0 0 10px 0;
-    color: #333;
+    color: #f9fafb;
 }
 
 .user-info p {
     margin: 5px 0;
-    color: #666;
+    color: #d1d5db;
 }
 
 .user-sessions {
@@ -2215,8 +2215,9 @@ body.main-page .info-instruction {
 }
 
 .session-item {
-    background: #f8f9fa;
-    padding: 10px;
+    background: #1f2937;
+    border: 1px solid #374151;
+    padding: 12px;
     border-radius: 8px;
     margin-bottom: 10px;
 }
@@ -2224,10 +2225,11 @@ body.main-page .info-instruction {
 .session-item p {
     margin: 3px 0;
     font-size: 14px;
+    color: #e5e7eb;
 }
 
 .pagination-info {
-    color: #666;
+    color: #9ca3af;
     font-size: 14px;
     margin-top: 5px;
 }
