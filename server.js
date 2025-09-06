@@ -2817,28 +2817,27 @@ app.post('/api/reviews/:reviewId/like', authenticateJWT, (req, res) => {
             res.status(500).json({ error: 'Database error' });
             return;
         }
+        
+        // Get updated like/dislike counts
+        const countQuery = `
+            SELECT 
+                COUNT(CASE WHEN is_like = 1 THEN 1 END) as likes_count,
+                COUNT(CASE WHEN is_like = 0 THEN 1 END) as dislikes_count
+            FROM review_likes 
+            WHERE review_id = ?
+        `;
+        
+        db.get(countQuery, [reviewId], (err, counts) => {
+            if (err) {
+                console.error('Error getting like counts:', err);
+                res.status(500).json({ error: 'Database error' });
+                return;
+            }
             
-            // Get updated like/dislike counts
-            const countQuery = `
-                SELECT 
-                    COUNT(CASE WHEN is_like = 1 THEN 1 END) as likes_count,
-                    COUNT(CASE WHEN is_like = 0 THEN 1 END) as dislikes_count
-                FROM review_likes 
-                WHERE review_id = ?
-            `;
-            
-            db.get(countQuery, [reviewId], (err, counts) => {
-                if (err) {
-                    console.error('Error getting like counts:', err);
-                    res.status(500).json({ error: 'Database error' });
-                    return;
-                }
-                
-                res.json({
-                    success: true,
-                    likes_count: counts.likes_count || 0,
-                    dislikes_count: counts.dislikes_count || 0
-                });
+            res.json({
+                success: true,
+                likes_count: counts.likes_count || 0,
+                dislikes_count: counts.dislikes_count || 0
             });
         });
     });
