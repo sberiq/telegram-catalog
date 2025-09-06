@@ -27,8 +27,8 @@ app.use(express.static('.'));
 
 // JWT Authentication Middleware
 function authenticateJWT(req, res, next) {
-    const accessToken = req.cookies.ACCESS_TOKEN;
-    const refreshToken = req.cookies.REFRESH_TOKEN;
+    const accessToken = req.cookies?.ACCESS_TOKEN;
+    const refreshToken = req.cookies?.REFRESH_TOKEN;
     
     if (!accessToken || !refreshToken) {
         return res.status(401).json({ error: 'No authentication tokens' });
@@ -657,8 +657,8 @@ app.post('/api/auth/signin', (req, res) => {
 
 // Get current user from JWT token
 app.get('/api/user/me', (req, res) => {
-    const accessToken = req.cookies.ACCESS_TOKEN;
-    const refreshToken = req.cookies.REFRESH_TOKEN;
+    const accessToken = req.cookies?.ACCESS_TOKEN;
+    const refreshToken = req.cookies?.REFRESH_TOKEN;
     
     if (!accessToken || !refreshToken) {
         res.status(401).json({ error: 'No authentication tokens' });
