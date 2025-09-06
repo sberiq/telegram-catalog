@@ -64,7 +64,6 @@ async function authenticateWithTelegramWidget(user) {
         const response = await fetch('/api/auth/signin', {
             method: 'POST',
             headers: {
-                ...getAuthHeaders(),
                 'Authorization': `tma ${initData}`
             }
         });
@@ -2131,7 +2130,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (initData) {
         fetch('/api/user/me', {
             headers: {
-                ...getAuthHeaders(),
                 'Authorization': `tma ${initData}`
             }
         })
