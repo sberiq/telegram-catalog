@@ -341,8 +341,8 @@ function displayMainSearchResults(channels, tags, query) {
                                 <div class="channel-header">
                 <div class="channel-name">${escapeHtml(channel.title)}</div>
                                     <div class="channel-rating">
-                    <div class="stars">${channel.stars}</div>
-                                        <span class="rating-value">${channel.avg_rating}/5</span>
+                    <div class="stars">${channel.avg_rating ? channel.stars : ''}</div>
+                                        <span class="rating-value">${channel.avg_rating ? channel.avg_rating + '/5' : 'Нет отзывов'}</span>
                 </div>
                                 </div>
                                 <div class="channel-description">${escapeHtml(channel.description)}</div>
@@ -405,8 +405,8 @@ async function showRandomChannel() {
                             <div class="channel-header">
                                 <div class="channel-name">${escapeHtml(channel.title)}</div>
                                 <div class="channel-rating">
-                                    <div class="stars">${channel.stars}</div>
-                                    <span class="rating-value">${channel.avg_rating}/5</span>
+                                    <div class="stars">${channel.avg_rating ? channel.stars : ''}</div>
+                                    <span class="rating-value">${channel.avg_rating ? channel.avg_rating + '/5' : 'Нет отзывов'}</span>
                                 </div>
                             </div>
                             <div class="channel-description">${escapeHtml(channel.description)}</div>
@@ -488,8 +488,8 @@ async function searchByTag(tagName) {
                                 <div class="channel-header">
                                     <div class="channel-name">${escapeHtml(channel.title)}</div>
                                     <div class="channel-rating">
-                                        <div class="stars">${channel.stars}</div>
-                                        <span class="rating-value">${channel.avg_rating}/5</span>
+                                        <div class="stars">${channel.avg_rating ? channel.stars : ''}</div>
+                                        <span class="rating-value">${channel.avg_rating ? channel.avg_rating + '/5' : 'Нет отзывов'}</span>
                                     </div>
                                 </div>
                                 <div class="channel-description">${escapeHtml(channel.description)}</div>
@@ -564,8 +564,8 @@ function displaySearchResults(channels) {
             <div class="channel-description">${escapeHtml(channel.description)}</div>
             <div class="rating-section">
                 <span class="rating-label">Рейтинг:</span>
-                <div class="stars">${channel.stars}</div>
-                <span class="rating-text">(${channel.avg_rating}/5)</span>
+                <div class="stars">${channel.avg_rating ? channel.stars : ''}</div>
+                <span class="rating-text">(${channel.avg_rating ? channel.avg_rating + '/5' : 'Нет отзывов'})</span>
             </div>
             <button class="details-button" onclick="showChannelDetails(${channel.id})">
                 Подробнее
@@ -598,8 +598,8 @@ function displayChannelDetails(channel) {
             </a>
             <div class="detail-rating">
                 <span class="rating-label">Рейтинг:</span>
-                <div class="stars">${channel.stars}</div>
-                <span class="rating-text">(${channel.avg_rating}/5)</span>
+                <div class="stars">${channel.avg_rating ? channel.stars : ''}</div>
+                <span class="rating-text">(${channel.avg_rating ? channel.avg_rating + '/5' : 'Нет отзывов'})</span>
             </div>
         </div>
         
@@ -2473,7 +2473,7 @@ function displayFavoriteChannels(favorites) {
         <div class="favorite-channel-item">
             <div class="favorite-channel-info">
                 <h6>${channel.title}</h6>
-                <p>${channel.subscribers || 'Неизвестно'} подписчиков • ${channel.avg_rating}/5 ${channel.stars}</p>
+                <p>${channel.subscribers || 'Неизвестно'} подписчиков • ${channel.avg_rating ? channel.avg_rating + '/5' : 'Нет отзывов'} ${channel.avg_rating ? channel.stars : ''}</p>
             </div>
             <button class="remove-favorite-btn" onclick="toggleFavorite(${channel.id})" title="Удалить из избранного">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2665,11 +2665,10 @@ async function approveChannel(channelId) {
 }
 
 async function rejectChannel(channelId) {
-    const reason = prompt('Введите причину отклонения:');
+    const reason = prompt('Введите причину отклонения (необязательно):');
     
-    if (!reason) {
-        showError('Причина отклонения обязательна');
-        return;
+    if (reason === null) {
+        return; // User cancelled
     }
     
     try {
@@ -2727,11 +2726,10 @@ async function approveReview(reviewId) {
 }
 
 async function rejectReview(reviewId) {
-    const reason = prompt('Введите причину отклонения:');
+    const reason = prompt('Введите причину отклонения (необязательно):');
     
-    if (!reason) {
-        showError('Причина отклонения обязательна');
-        return;
+    if (reason === null) {
+        return; // User cancelled
     }
     
     try {

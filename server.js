@@ -1065,8 +1065,8 @@ app.get('/api/channels', (req, res) => {
         
         const channels = rows.map(row => ({
             ...row,
-            avg_rating: Math.round(row.avg_rating * 10) / 10,
-            stars: generateStars(row.avg_rating)
+            avg_rating: row.review_count > 0 ? Math.round(row.avg_rating * 10) / 10 : null,
+            stars: row.review_count > 0 ? generateStars(row.avg_rating) : 'Нет отзывов'
         }));
         
         res.json(channels);
@@ -1325,8 +1325,8 @@ app.get('/api/channels/search', (req, res) => {
         
         const channels = rows.map(row => ({
             ...row,
-            avg_rating: Math.round(row.avg_rating * 10) / 10,
-            stars: generateStars(row.avg_rating),
+            avg_rating: row.review_count > 0 ? Math.round(row.avg_rating * 10) / 10 : null,
+            stars: row.review_count > 0 ? generateStars(row.avg_rating) : 'Нет отзывов',
             tags: row.tags ? row.tags.split(',') : []
         }));
         
@@ -1457,8 +1457,8 @@ app.get('/api/channels/by-tag', (req, res) => {
         
         const channels = rows.map(row => ({
             ...row,
-            avg_rating: Math.round(row.avg_rating * 10) / 10,
-            stars: generateStars(row.avg_rating),
+            avg_rating: row.review_count > 0 ? Math.round(row.avg_rating * 10) / 10 : null,
+            stars: row.review_count > 0 ? generateStars(row.avg_rating) : 'Нет отзывов',
             tags: row.tags ? row.tags.split(',') : []
         }));
         
@@ -1502,8 +1502,8 @@ app.get('/api/channels/random', (req, res) => {
         
         const channel = {
             ...row,
-            avg_rating: Math.round(row.avg_rating * 10) / 10,
-            stars: generateStars(row.avg_rating),
+            avg_rating: row.review_count > 0 ? Math.round(row.avg_rating * 10) / 10 : null,
+            stars: row.review_count > 0 ? generateStars(row.avg_rating) : 'Нет отзывов',
             tags: row.tags ? row.tags.split(',') : []
         };
         
@@ -1548,8 +1548,8 @@ app.get('/api/tags/:tagId/channels', (req, res) => {
         
         const channels = rows.map(row => ({
             ...row,
-            avg_rating: Math.round(row.avg_rating * 10) / 10,
-            stars: generateStars(row.avg_rating),
+            avg_rating: row.review_count > 0 ? Math.round(row.avg_rating * 10) / 10 : null,
+            stars: row.review_count > 0 ? generateStars(row.avg_rating) : 'Нет отзывов',
             tags: row.tags ? row.tags.split(',') : []
         }));
         
