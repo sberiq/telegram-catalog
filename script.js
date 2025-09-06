@@ -971,7 +971,7 @@ async function handleAdminLogin(e) {
             document.getElementById('logoutBtn').style.display = 'block';
             // Switch to admin page
             hideAllPages();
-            document.getElementById('adminPage').classList.remove('hidden');
+            document.getElementById('adminPanelPage').classList.remove('hidden');
             currentPage = 'admin';
             loadAdminContent();
             showSuccess('Успешный вход в админ-панель');
