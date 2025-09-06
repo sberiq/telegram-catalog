@@ -1565,7 +1565,7 @@ app.get('/api/tags', (req, res) => {
 });
 
 // Add new channel
-app.post("/api/channels", checkUser,  res) => {
+app.post("/api/channels", checkUser, (req, res) => {
     if (!req.user) {
         return res.status(401).json({ error: 'Authentication required' });
     }
@@ -1644,7 +1644,7 @@ app.post("/api/channels", checkUser,  res) => {
 });
 
 // Add review
-app.post("/api/channels", checkUser,  res) => {
+app.post("/api/channels/:id/reviews", checkUser, (req, res) => {
     const channelId = req.params.id;
     const { text, rating, is_anonymous } = req.body;
     
@@ -1882,7 +1882,7 @@ app.put('/api/user/profile', (req, res) => {
 });
 
 // Add/remove favorite channel
-app.post("/api/user/favorites/:channelId", checkUser,  res) => {
+app.post("/api/user/favorites/:channelId", checkUser, (req, res) => {
     const channelId = req.params.channelId;
     const userId = req.user.id;
     
@@ -1968,7 +1968,7 @@ app.post('/api/admin/users/:userId/unverify', (req, res) => {
 });
 
 // Add channel admin
-app.post("/api/channels", checkUser,  res) => {
+app.post("/api/channels", checkUser, (req, res) => {
     const channelId = req.params.channelId;
     const { adminUserId } = req.body;
     
@@ -2555,7 +2555,7 @@ app.get('/api/admin/search', (req, res) => {
 });
 
 // Approve channel
-app.post("/api/channels", checkUser,  res) => {
+app.post("/api/channels", checkUser, (req, res) => {
     const channelId = req.params.id;
     
     const query = 'UPDATE channels SET status = ? WHERE id = ?';
@@ -2608,7 +2608,7 @@ app.delete('/api/admin/channels/:id', (req, res) => {
 });
 
 // Approve review
-app.post("/api/channels/:id/reviews", checkUser,  res) => {
+app.post("/api/channels/:id/reviews", checkUser, (req, res) => {
     const reviewId = req.params.id;
     
     const query = 'UPDATE reviews SET status = ? WHERE id = ?';
@@ -3009,7 +3009,7 @@ app.use((err, req, res, next) => {
 });
 
 // Like/Dislike review
-app.post("/api/channels/:id/reviews", checkUser,  res) => {
+app.post("/api/channels/:id/reviews", checkUser, (req, res) => {
     const reviewId = req.params.reviewId;
     const { isLike } = req.body;
     const userId = req.user.id;
@@ -3053,7 +3053,7 @@ app.post("/api/channels/:id/reviews", checkUser,  res) => {
 });
 
 // Remove like/dislike
-app.delete("/api/reviews/:reviewId/like", checkUser,  res) => {
+app.delete("/api/reviews/:reviewId/like", checkUser, (req, res) => {
     const reviewId = req.params.reviewId;
     const userId = req.user.id;
     
@@ -3096,7 +3096,7 @@ app.delete("/api/reviews/:reviewId/like", checkUser,  res) => {
     });
 
 // Reject channel
-app.post("/api/channels", checkUser,  res) => {
+app.post("/api/channels", checkUser, (req, res) => {
     const channelId = req.params.id;
     const { reason } = req.body;
     
@@ -3113,7 +3113,7 @@ app.post("/api/channels", checkUser,  res) => {
 });
 
 // Approve review
-app.post("/api/channels/:id/reviews", checkUser,  res) => {
+app.post("/api/channels/:id/reviews", checkUser, (req, res) => {
     const reviewId = req.params.id;
     
     const query = 'UPDATE reviews SET status = ? WHERE id = ?';
@@ -3129,7 +3129,7 @@ app.post("/api/channels/:id/reviews", checkUser,  res) => {
 });
 
 // Reject review
-app.post("/api/channels/:id/reviews", checkUser,  res) => {
+app.post("/api/channels/:id/reviews", checkUser, (req, res) => {
     const reviewId = req.params.id;
     const { reason } = req.body;
     
