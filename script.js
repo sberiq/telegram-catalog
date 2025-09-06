@@ -943,9 +943,11 @@ function showAdminPanel() {
 // Admin Panel Functions
 async function handleAdminLogin(e) {
     e.preventDefault();
+    console.log('Admin login form submitted');
     
     const username = document.getElementById('adminUsername').value;
     const password = document.getElementById('adminPassword').value;
+    console.log('Username:', username, 'Password length:', password.length);
     
     try {
         const response = await fetch('/api/admin/login', {
@@ -963,6 +965,7 @@ async function handleAdminLogin(e) {
         const result = await response.json();
         
         if (response.ok) {
+            console.log('Login successful, switching to admin panel');
             isAdminLoggedIn = true;
             currentAdmin = result.admin; // Store admin info
             // Hide login form and show dashboard ONLY after successful login
@@ -971,7 +974,14 @@ async function handleAdminLogin(e) {
             document.getElementById('logoutBtn').style.display = 'block';
             // Switch to admin page
             hideAllPages();
-            document.getElementById('adminPanelPage').classList.remove('hidden');
+            const adminPanel = document.getElementById('adminPanelPage');
+            console.log('Admin panel element:', adminPanel);
+            if (adminPanel) {
+                adminPanel.classList.remove('hidden');
+                console.log('Admin panel shown');
+            } else {
+                console.error('Admin panel element not found!');
+            }
             currentPage = 'admin';
             loadAdminContent();
             showSuccess('Успешный вход в админ-панель');
