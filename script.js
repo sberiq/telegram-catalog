@@ -55,6 +55,7 @@ async function authenticateWithTelegramWidget(user) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({ 
                 initData: initData
             }),
@@ -698,6 +699,7 @@ document.getElementById('addChannelForm').addEventListener('submit', async (e) =
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify(channelData)
         });
         
@@ -737,6 +739,7 @@ async function handleAddReview(e) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify(reviewData)
         });
         
@@ -897,6 +900,7 @@ async function handleAdminLogin(e) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({ username, password })
         });
         
@@ -1352,6 +1356,7 @@ async function handleAddTag(e) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({ name: tagName })
         });
         
@@ -1390,6 +1395,7 @@ document.getElementById('addChannelForm').addEventListener('submit', async (e) =
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify(channelData)
         });
         
@@ -1606,6 +1612,7 @@ async function handleAddAdmin(e) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({ username, password })
         });
         
@@ -1988,6 +1995,7 @@ async function linkAdminTelegram(adminId) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({
                 adminId: adminId,
                 telegramId: parseInt(telegramId)
@@ -2018,6 +2026,7 @@ async function unlinkAdminTelegram(adminId) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({
                 adminId: adminId
             })
@@ -2051,6 +2060,7 @@ async function blockUser(userId) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({
                 reason: reason
             })
@@ -2383,6 +2393,7 @@ async function saveProfile() {
     try {
         const response = await fetch('/api/user/profile', {
             method: 'PUT',
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -2463,6 +2474,7 @@ async function linkAdminWithUser(telegramUserId) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({
                 adminId: currentAdmin.id,
                 telegramUserId: telegramUserId
@@ -2496,6 +2508,7 @@ async function unlinkAdminFromUser() {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({
                 adminId: currentAdmin.id
             })
@@ -2557,6 +2570,7 @@ async function rejectChannel(channelId) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({ reason })
         });
         
@@ -2613,6 +2627,7 @@ async function rejectReview(reviewId) {
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({ reason })
         });
         
@@ -2739,9 +2754,11 @@ async function handleEditChannel(e) {
     try {
         const response = await fetch(`/api/admin/channels/${channelId}`, {
             method: 'PUT',
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify(formData)
         });
         
