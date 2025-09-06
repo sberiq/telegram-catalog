@@ -2885,7 +2885,6 @@ app.delete('/api/reviews/:reviewId/like', authenticateJWT, (req, res) => {
             });
         });
     });
-});
 
 // Reject channel
 app.post('/api/admin/channels/:id/reject', (req, res) => {
