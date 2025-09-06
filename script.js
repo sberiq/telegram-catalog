@@ -41,13 +41,6 @@ function generateSessionToken() {
 
 // Helper function to get authorization headers
 function getAuthHeaders() {
-    const initData = window.Telegram?.WebApp?.initData;
-    if (initData) {
-        return {
-            'Authorization': `tma ${initData}`
-        };
-    }
-    // If no initData but user is logged in, send user ID
     if (currentUser && currentUser.id) {
         return {
             'x-user-id': currentUser.id.toString()
@@ -59,21 +52,20 @@ function getAuthHeaders() {
 // Authenticate with Telegram Widget data
 async function authenticateWithTelegramWidget(user) {
     try {
-        // Get initData from Telegram WebApp
-        const initData = window.Telegram.WebApp.initData;
-        
-        if (!initData) {
-            console.error('No initData available');
-            return false;
-        }
-        
-        const response = await fetch('/api/auth/signin', {
+        const response = await fetch('/api/telegram/widget-auth', {
             method: 'POST',
             headers: {
-                ...getAuthHeaders(),
-                'Authorization': `tma ${initData}`
+                'Content-Type': 'application/json'
             },
-            credentials: 'include' // Include cookies
+            body: JSON.stringify({
+                id: user.id,
+                first_name: user.first_name,
+                last_name: user.last_name,
+                username: user.username,
+                photo_url: user.photo_url,
+                auth_date: user.auth_date,
+                hash: user.hash
+            })
         });
         
         const result = await response.json();
@@ -2179,80 +2171,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Try to authenticate with Telegram if available
-    const initData = window.Telegram?.WebApp?.initData;
-    if (initData) {
-        fetch('/api/user/me', {
-            headers: {
-                ...getAuthHeaders(),
-                'Authorization': `tma ${initData}`
-            },
-            credentials: 'include' // Include cookies
-        })
-        .then(response => {
-            if (response.ok) {
-                return response.json();
-            } else {
-                throw new Error('Not authenticated');
-            }
-        })
-        .then(user => {
-            if (user.id) {
-                currentUser = user;
-                // Store user data locally
-                localStorage.setItem('telegram_user', JSON.stringify(user));
-                updateAuthUI();
-                console.log('Authenticated with Telegram:', user);
-            }
-        })
-        .catch(() => {
-            console.log('Telegram authentication failed, trying cookie authentication');
-            // Try cookie-based authentication
-            return fetch('/api/user/me', {
-                credentials: 'include'
-            });
-        })
-        .then(response => {
-            if (response && response.ok) {
-                return response.json();
-            }
-            throw new Error('No authentication available');
-        })
-        .then(user => {
-            if (user && user.id) {
-                currentUser = user;
-                localStorage.setItem('telegram_user', JSON.stringify(user));
-                updateAuthUI();
-                console.log('Authenticated with cookie:', user);
-            }
-        })
-        .catch(() => {
-            console.log('No authentication available, using stored data if available');
-        });
-    } else {
-        console.log('No Telegram initData available, trying cookie authentication');
-        // Try cookie-based authentication
-        fetch('/api/user/me', {
-            credentials: 'include'
-        })
-        .then(response => {
-            if (response.ok) {
-                return response.json();
-            }
-            throw new Error('Not authenticated');
-        })
-        .then(user => {
-            if (user && user.id) {
-                currentUser = user;
-                localStorage.setItem('telegram_user', JSON.stringify(user));
-                updateAuthUI();
-                console.log('Authenticated with cookie:', user);
-            }
-        })
-        .catch(() => {
-            console.log('No cookie authentication available, using stored data if available');
-        });
+    // Try to authenticate with stored data
+    if (storedUser) {
+        console.log('Using stored user data');
+        return;
     }
+    
+    // If no stored data, user needs to login via Telegram Widget
+    console.log('No stored user data, user needs to login');
     
     // Add event listeners
     document.getElementById('loginForm').addEventListener('submit', handleAdminLogin);

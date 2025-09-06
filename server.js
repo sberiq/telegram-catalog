@@ -779,21 +779,200 @@ app.post('/api/auth/signin', (req, res) => {
     }
 });
 
+// Telegram Widget authentication endpoint
+app.post('/api/telegram/widget-auth', (req, res) => {
+    const { id, first_name, last_name, username, photo_url, auth_date, hash } = req.body;
+    
+    if (!id || !auth_date || !hash) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Create or update user
+    const userQuery = 'SELECT * FROM users WHERE telegram_id = ?';
+    db.get(userQuery, [id], (err, existingUser) => {
+        if (err) {
+            console.error('Error checking user:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        if (existingUser) {
+            // Update existing user
+            const updateQuery = `
+                UPDATE users 
+                SET username = ?, first_name = ?, last_name = ?, last_login = CURRENT_TIMESTAMP
+                WHERE telegram_id = ?
+            `;
+            db.run(updateQuery, [
+                username || '',
+                first_name || '',
+                last_name || '',
+                id
+            ], (err) => {
+                if (err) {
+                    console.error('Error updating user:', err);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+                
+                // Get updated user
+                db.get(userQuery, [id], (err, user) => {
+                    if (err) {
+                        console.error('Error getting updated user:', err);
+                        return res.status(500).json({ error: 'Database error' });
+                    }
+                    
+                    // Check admin status
+                    const adminQuery = 'SELECT * FROM admins WHERE telegram_user_id = ?';
+                    db.get(adminQuery, [user.id], (err, admin) => {
+                        if (err) {
+                            console.error('Error checking admin status:', err);
+                        }
+                        
+                        const isAdmin = !!admin;
+                        
+                        res.json({
+                            success: true,
+                            message: 'User authenticated successfully',
+                            user: {
+                                id: user.id,
+                                username: user.username,
+                                first_name: user.first_name,
+                                last_name: user.last_name,
+                                is_admin: isAdmin
+                            }
+                        });
+                    });
+                });
+            });
+        } else {
+            // Create new user
+            const insertQuery = `
+                INSERT INTO users (telegram_id, username, first_name, last_name, created_at, last_login)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `;
+            db.run(insertQuery, [
+                id,
+                username || '',
+                first_name || '',
+                last_name || ''
+            ], function(err) {
+                if (err) {
+                    console.error('Error creating user:', err);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+                
+                const newUserId = this.lastID;
+                
+                // Check admin status
+                const adminQuery = 'SELECT * FROM admins WHERE telegram_user_id = ?';
+                db.get(adminQuery, [newUserId], (err, admin) => {
+                    if (err) {
+                        console.error('Error checking admin status:', err);
+                    }
+                    
+                    const isAdmin = !!admin;
+                    
+                    res.json({
+                        success: true,
+                        message: 'User created and authenticated successfully',
+                        user: {
+                            id: newUserId,
+                            username: username || '',
+                            first_name: first_name || '',
+                            last_name: last_name || '',
+                            is_admin: isAdmin
+                        }
+                    });
+                });
+            });
+        }
+    });
+});
+
 // Get current user info
-app.get('/api/user/me', authenticateOptional, (req, res) => {
-    if (!req.user) {
+app.get('/api/user/me', (req, res) => {
+    const userId = req.header('x-user-id');
+    
+    if (!userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
     
-    res.json({
-        id: req.user.telegram_id,
-        username: req.user.username,
-        first_name: req.user.first_name,
-        last_name: req.user.last_name,
-        is_admin: req.user.is_admin,
-        admin_username: req.user.admin_username
+    // Find user by ID
+    const userQuery = 'SELECT * FROM users WHERE id = ?';
+    db.get(userQuery, [userId], (err, user) => {
+        if (err) {
+            console.error('Error getting user:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // Check admin status
+        const adminQuery = 'SELECT * FROM admins WHERE telegram_user_id = ?';
+        db.get(adminQuery, [user.telegram_id], (err, admin) => {
+            if (err) {
+                console.error('Error checking admin status:', err);
+            }
+            
+            res.json({
+                id: user.telegram_id,
+                username: user.username,
+                first_name: user.first_name,
+                last_name: user.last_name,
+                is_admin: !!admin,
+                admin_username: admin ? admin.username : null
+            });
+        });
     });
 });
+
+// Simple user check middleware
+function checkUser(req, res, next) {
+    const userId = req.header('x-user-id');
+    
+    if (!userId) {
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    // Find user by ID
+    const userQuery = 'SELECT * FROM users WHERE id = ?';
+    db.get(userQuery, [userId], (err, user) => {
+        if (err) {
+            console.error('Error getting user:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // Check if user is blocked
+        if (user.is_blocked) {
+            return res.status(403).json({ error: 'Ваш аккаунт заблокирован' });
+        }
+        
+        // Check admin status
+        const adminQuery = 'SELECT * FROM admins WHERE telegram_user_id = ?';
+        db.get(adminQuery, [user.telegram_id], (err, admin) => {
+            if (err) {
+                console.error('Error checking admin status:', err);
+            }
+            
+            req.user = {
+                id: user.id,
+                telegram_id: user.telegram_id,
+                username: user.username,
+                first_name: user.first_name,
+                last_name: user.last_name,
+                is_admin: !!admin,
+                admin_username: admin ? admin.username : null
+            };
+            
+            next();
+        });
+    });
+}
 
 // Logout endpoint
 app.post('/api/auth/logout', (req, res) => {
@@ -1386,7 +1565,7 @@ app.get('/api/tags', (req, res) => {
 });
 
 // Add new channel
-app.post('/api/channels', authenticateOptional, (req, res) => {
+app.post("/api/channels", checkUser,  res) => {
     if (!req.user) {
         return res.status(401).json({ error: 'Authentication required' });
     }
@@ -1465,7 +1644,7 @@ app.post('/api/channels', authenticateOptional, (req, res) => {
 });
 
 // Add review
-app.post('/api/channels/:id/reviews', authenticateOptional, (req, res) => {
+app.post("/api/channels", checkUser,  res) => {
     const channelId = req.params.id;
     const { text, rating, is_anonymous } = req.body;
     
@@ -1703,7 +1882,7 @@ app.put('/api/user/profile', (req, res) => {
 });
 
 // Add/remove favorite channel
-app.post('/api/user/favorites/:channelId', authenticateOptional, (req, res) => {
+app.post("/api/user/favorites/:channelId", checkUser,  res) => {
     const channelId = req.params.channelId;
     const userId = req.user.id;
     
@@ -1789,7 +1968,7 @@ app.post('/api/admin/users/:userId/unverify', (req, res) => {
 });
 
 // Add channel admin
-app.post('/api/admin/channels/:channelId/admins', (req, res) => {
+app.post("/api/channels", checkUser,  res) => {
     const channelId = req.params.channelId;
     const { adminUserId } = req.body;
     
@@ -2376,7 +2555,7 @@ app.get('/api/admin/search', (req, res) => {
 });
 
 // Approve channel
-app.post('/api/admin/channels/:id/approve', (req, res) => {
+app.post("/api/channels", checkUser,  res) => {
     const channelId = req.params.id;
     
     const query = 'UPDATE channels SET status = ? WHERE id = ?';
@@ -2429,7 +2608,7 @@ app.delete('/api/admin/channels/:id', (req, res) => {
 });
 
 // Approve review
-app.post('/api/admin/reviews/:id/approve', (req, res) => {
+app.post("/api/channels/:id/reviews", checkUser,  res) => {
     const reviewId = req.params.id;
     
     const query = 'UPDATE reviews SET status = ? WHERE id = ?';
@@ -2830,7 +3009,7 @@ app.use((err, req, res, next) => {
 });
 
 // Like/Dislike review
-app.post('/api/reviews/:reviewId/like', authenticateOptional, (req, res) => {
+app.post("/api/channels/:id/reviews", checkUser,  res) => {
     const reviewId = req.params.reviewId;
     const { isLike } = req.body;
     const userId = req.user.id;
@@ -2874,7 +3053,7 @@ app.post('/api/reviews/:reviewId/like', authenticateOptional, (req, res) => {
 });
 
 // Remove like/dislike
-app.delete('/api/reviews/:reviewId/like', authenticateOptional, (req, res) => {
+app.delete("/api/reviews/:reviewId/like", checkUser,  res) => {
     const reviewId = req.params.reviewId;
     const userId = req.user.id;
     
@@ -2917,7 +3096,7 @@ app.delete('/api/reviews/:reviewId/like', authenticateOptional, (req, res) => {
     });
 
 // Reject channel
-app.post('/api/admin/channels/:id/reject', (req, res) => {
+app.post("/api/channels", checkUser,  res) => {
     const channelId = req.params.id;
     const { reason } = req.body;
     
@@ -2934,7 +3113,7 @@ app.post('/api/admin/channels/:id/reject', (req, res) => {
 });
 
 // Approve review
-app.post('/api/admin/reviews/:id/approve', (req, res) => {
+app.post("/api/channels/:id/reviews", checkUser,  res) => {
     const reviewId = req.params.id;
     
     const query = 'UPDATE reviews SET status = ? WHERE id = ?';
@@ -2950,7 +3129,7 @@ app.post('/api/admin/reviews/:id/approve', (req, res) => {
 });
 
 // Reject review
-app.post('/api/admin/reviews/:id/reject', (req, res) => {
+app.post("/api/channels/:id/reviews", checkUser,  res) => {
     const reviewId = req.params.id;
     const { reason } = req.body;
     
