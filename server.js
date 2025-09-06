@@ -2,6 +2,7 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const path = require('path');
+const cookieParser = require('cookie-parser');
 const { parse, isValid } = require('@telegram-apps/init-data-node');
 const jwt = require('jsonwebtoken');
 
@@ -21,6 +22,7 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static('.'));
 
 // JWT Authentication Middleware
