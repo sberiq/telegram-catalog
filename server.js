@@ -91,6 +91,63 @@ function authenticateTMA(req, res, next) {
     }
 }
 
+// Alternative authentication middleware for when initData is not available
+function authenticateOptional(req, res, next) {
+    const [authType, authData = ''] = (req.header('authorization') || '').split(' ');
+
+    if (authType === 'tma' && authData) {
+        // Try to authenticate with initData first
+        return authenticateTMA(req, res, next);
+    } else {
+        // If no initData, check if we have user info in request body or headers
+        const userId = req.body?.userId || req.header('x-user-id');
+        
+        if (userId) {
+            // Find user by ID
+            const userQuery = 'SELECT * FROM users WHERE id = ?';
+            db.get(userQuery, [userId], (err, user) => {
+                if (err) {
+                    console.error('Error getting user:', err);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+                
+                if (!user) {
+                    return res.status(404).json({ error: 'User not found' });
+                }
+                
+                // Check if user is blocked
+                if (user.is_blocked) {
+                    return res.status(403).json({ error: 'Ваш аккаунт заблокирован' });
+                }
+                
+                // Check admin status
+                const adminQuery = 'SELECT * FROM admins WHERE telegram_user_id = ?';
+                db.get(adminQuery, [user.telegram_id], (err, admin) => {
+                    if (err) {
+                        console.error('Error checking admin status:', err);
+                    }
+                    
+                    req.user = {
+                        id: user.id,
+                        telegram_id: user.telegram_id,
+                        username: user.username,
+                        first_name: user.first_name,
+                        last_name: user.last_name,
+                        is_admin: !!admin,
+                        admin_username: admin ? admin.username : null
+                    };
+                    
+                    next();
+                });
+            });
+        } else {
+            // No authentication available, proceed without user
+            req.user = null;
+            next();
+        }
+    }
+}
+
 // User activity tracking middleware
 app.use((req, res, next) => {
     const userAgent = req.get('User-Agent') || '';
@@ -645,7 +702,11 @@ app.post('/api/auth/signin', (req, res) => {
 });
 
 // Get current user info
-app.get('/api/user/me', authenticateTMA, (req, res) => {
+app.get('/api/user/me', authenticateOptional, (req, res) => {
+    if (!req.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
     res.json({
         id: req.user.telegram_id,
         username: req.user.username,
@@ -1241,7 +1302,11 @@ app.get('/api/tags', (req, res) => {
 });
 
 // Add new channel
-app.post('/api/channels', authenticateTMA, (req, res) => {
+app.post('/api/channels', authenticateOptional, (req, res) => {
+    if (!req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+    
     const { title, description, link, tags } = req.body;
     
     if (!title || !description || !link) {
@@ -1316,7 +1381,7 @@ app.post('/api/channels', authenticateTMA, (req, res) => {
 });
 
 // Add review
-app.post('/api/channels/:id/reviews', authenticateTMA, (req, res) => {
+app.post('/api/channels/:id/reviews', authenticateOptional, (req, res) => {
     const channelId = req.params.id;
     const { text, rating, is_anonymous } = req.body;
     
@@ -1554,7 +1619,7 @@ app.put('/api/user/profile', (req, res) => {
 });
 
 // Add/remove favorite channel
-app.post('/api/user/favorites/:channelId', authenticateTMA, (req, res) => {
+app.post('/api/user/favorites/:channelId', authenticateOptional, (req, res) => {
     const channelId = req.params.channelId;
     const userId = req.user.id;
     
@@ -2681,7 +2746,7 @@ app.use((err, req, res, next) => {
 });
 
 // Like/Dislike review
-app.post('/api/reviews/:reviewId/like', authenticateTMA, (req, res) => {
+app.post('/api/reviews/:reviewId/like', authenticateOptional, (req, res) => {
     const reviewId = req.params.reviewId;
     const { isLike } = req.body;
     const userId = req.user.id;
@@ -2725,7 +2790,7 @@ app.post('/api/reviews/:reviewId/like', authenticateTMA, (req, res) => {
 });
 
 // Remove like/dislike
-app.delete('/api/reviews/:reviewId/like', authenticateTMA, (req, res) => {
+app.delete('/api/reviews/:reviewId/like', authenticateOptional, (req, res) => {
     const reviewId = req.params.reviewId;
     const userId = req.user.id;
     

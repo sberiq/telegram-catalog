@@ -41,10 +41,16 @@ function generateSessionToken() {
 
 // Helper function to get authorization headers
 function getAuthHeaders() {
-    const initData = window.Telegram.WebApp.initData;
+    const initData = window.Telegram?.WebApp?.initData;
     if (initData) {
         return {
             'Authorization': `tma ${initData}`
+        };
+    }
+    // If no initData but user is logged in, send user ID
+    if (currentUser && currentUser.id) {
+        return {
+            'x-user-id': currentUser.id.toString()
         };
     }
     return {};
@@ -74,6 +80,8 @@ async function authenticateWithTelegramWidget(user) {
             console.log('Server authentication successful:', result);
             // Update current user
             currentUser = result.user;
+            // Store user data locally
+            localStorage.setItem('telegram_user', JSON.stringify(result.user));
             // Force UI update after successful authentication
             setTimeout(() => {
                 updateAuthUI();
@@ -169,6 +177,8 @@ function loginWithTelegram() {
 function logoutUser() {
     currentUser = null;
     sessionToken = null;
+    // Clear stored user data
+    localStorage.removeItem('telegram_user');
     updateAuthUI();
     showSuccess('Вы вышли из аккаунта');
 }
@@ -2123,10 +2133,21 @@ async function unblockUser(userId) {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Telegram Catalog App initialized');
     
-    // Telegram Widget will be initialized automatically when modal opens
+    // Check for stored user data first
+    const storedUser = localStorage.getItem('telegram_user');
+    if (storedUser) {
+        try {
+            currentUser = JSON.parse(storedUser);
+            updateAuthUI();
+            console.log('Restored user from localStorage:', currentUser);
+        } catch (e) {
+            console.error('Error parsing stored user data:', e);
+            localStorage.removeItem('telegram_user');
+        }
+    }
     
-    // Check for existing session by trying to authenticate
-    const initData = window.Telegram.WebApp.initData;
+    // Try to authenticate with Telegram if available
+    const initData = window.Telegram?.WebApp?.initData;
     if (initData) {
         fetch('/api/user/me', {
             headers: {
@@ -2143,18 +2164,17 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(user => {
             if (user.id) {
                 currentUser = user;
+                // Store user data locally
+                localStorage.setItem('telegram_user', JSON.stringify(user));
                 updateAuthUI();
+                console.log('Authenticated with Telegram:', user);
             }
         })
         .catch(() => {
-            // Not authenticated, clear any existing data
-            currentUser = null;
-            updateAuthUI();
+            console.log('Telegram authentication failed, using stored data if available');
         });
     } else {
-        // No initData available
-        currentUser = null;
-        updateAuthUI();
+        console.log('No Telegram initData available, using stored data if available');
     }
     
     // Add event listeners
