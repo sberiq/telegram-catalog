@@ -2632,7 +2632,7 @@ app.delete('/api/admin/channels/:id', (req, res) => {
 });
 
 // Approve review
-app.post("/api/channels/:id/reviews", checkUser, (req, res) => {
+app.post("/api/admin/reviews/:id/approve", checkUser, (req, res) => {
     const reviewId = req.params.id;
     
     const query = 'UPDATE reviews SET status = ? WHERE id = ?';
@@ -3033,7 +3033,7 @@ app.use((err, req, res, next) => {
 });
 
 // Like/Dislike review
-app.post("/api/channels/:id/reviews", checkUser, (req, res) => {
+app.post("/api/reviews/:reviewId/like", checkUser, (req, res) => {
     const reviewId = req.params.reviewId;
     const { isLike } = req.body;
     const userId = req.user.id;
@@ -3120,7 +3120,7 @@ app.delete("/api/reviews/:reviewId/like", checkUser, (req, res) => {
     });
 
 // Reject channel
-app.post("/api/channels", checkUser, (req, res) => {
+app.post("/api/admin/channels/:id/reject", checkUser, (req, res) => {
     const channelId = req.params.id;
     const { reason } = req.body;
     
@@ -3136,24 +3136,8 @@ app.post("/api/channels", checkUser, (req, res) => {
     });
 });
 
-// Approve review
-app.post("/api/channels/:id/reviews", checkUser, (req, res) => {
-    const reviewId = req.params.id;
-    
-    const query = 'UPDATE reviews SET status = ? WHERE id = ?';
-    db.run(query, ['approved', reviewId], function(err) {
-        if (err) {
-            console.error('Error approving review:', err);
-            res.status(500).json({ error: 'Database error' });
-            return;
-        }
-        
-        res.json({ success: true, message: 'Review approved' });
-    });
-});
-
 // Reject review
-app.post("/api/channels/:id/reviews", checkUser, (req, res) => {
+app.post("/api/admin/reviews/:id/reject", checkUser, (req, res) => {
     const reviewId = req.params.id;
     const { reason } = req.body;
     
