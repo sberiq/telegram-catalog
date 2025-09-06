@@ -1262,7 +1262,12 @@ async function approveChannel(channelId) {
         
         if (response.ok) {
             showSuccess('Канал одобрен');
-            loadAdminChannels();
+            // Reload the current tab content
+            if (currentAdminTab === 'channels-moderation') {
+                loadAdminChannelsModeration();
+            } else {
+                loadAdminChannels();
+            }
         } else {
             showError('Ошибка одобрения канала');
         }
@@ -1282,7 +1287,12 @@ async function deleteChannel(channelId) {
         
         if (response.ok) {
             showSuccess('Канал удален');
-            loadAdminChannels();
+            // Reload the current tab content
+            if (currentAdminTab === 'channels-moderation') {
+                loadAdminChannelsModeration();
+            } else {
+                loadAdminChannels();
+            }
         } else {
             showError('Ошибка удаления канала');
         }
@@ -1300,7 +1310,12 @@ async function approveReview(reviewId) {
         
         if (response.ok) {
             showSuccess('Отзыв одобрен');
-            loadAdminReviews();
+            // Reload the current tab content
+            if (currentAdminTab === 'reviews-moderation') {
+                loadAdminReviewsModeration();
+            } else {
+                loadAdminReviews();
+            }
         } else {
             showError('Ошибка одобрения отзыва');
         }
@@ -1320,7 +1335,12 @@ async function deleteReview(reviewId) {
         
         if (response.ok) {
             showSuccess('Отзыв удален');
-            loadAdminReviews();
+            // Reload the current tab content
+            if (currentAdminTab === 'reviews-moderation') {
+                loadAdminReviewsModeration();
+            } else {
+                loadAdminReviews();
+            }
         } else {
             showError('Ошибка удаления отзыва');
         }

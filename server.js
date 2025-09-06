@@ -211,26 +211,23 @@ function authenticateOptional(req, res, next) {
 app.use((req, res, next) => {
     const userAgent = req.get('User-Agent') || '';
     const clientIP = getClientIP(req);
-    const deviceInfo = parseUserAgent(userAgent);
     
     // Track all requests for analytics
     const trackRequest = () => {
         const insertQuery = `
-            INSERT INTO user_requests (ip_address, user_agent, endpoint, method, device_type, browser, os, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO user_requests (ip_address, user_agent, endpoint, method, created_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
         `;
         
-        db.run(insertQuery, [clientIP, userAgent, req.path, req.method, deviceInfo.device_type, deviceInfo.browser, deviceInfo.os], (err) => {
+        db.run(insertQuery, [clientIP, userAgent, req.path, req.method], (err) => {
             if (err && !err.message.includes('no such table')) {
                 console.error('Error tracking request:', err);
             }
         });
     };
     
-    // Track all requests (skip static files and admin endpoints)
-    if (!req.path.startsWith('/static/') && !req.path.startsWith('/css/') && !req.path.startsWith('/js/') && !req.path.startsWith('/images/')) {
-        trackRequest();
-    }
+    // Track all requests
+    trackRequest();
     
     next();
 });
@@ -303,22 +300,9 @@ function initializeDatabase() {
             user_agent TEXT,
             endpoint TEXT,
             method TEXT,
-            device_type TEXT,
-            browser TEXT,
-            os TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     `);
-
-    // Add new columns to user_requests table if they don't exist
-    const requestColumns = ['device_type', 'browser', 'os'];
-    requestColumns.forEach(column => {
-        db.run(`ALTER TABLE user_requests ADD COLUMN ${column} TEXT`, (err) => {
-            if (err && !err.message.includes('duplicate column name')) {
-                console.error(`Error adding ${column} to user_requests:`, err);
-            }
-        });
-    });
 
     // Create review_likes table for likes/dislikes on reviews
     db.run(`
@@ -815,7 +799,7 @@ app.post('/api/telegram/widget-auth', (req, res) => {
             // Update existing user
             const updateQuery = `
                 UPDATE users 
-                SET username = ?, first_name = ?, last_name = ?, last_login = CURRENT_TIMESTAMP
+                SET username = ?, first_name = ?, last_name = ?, last_seen = CURRENT_TIMESTAMP
                 WHERE telegram_id = ?
             `;
             db.run(updateQuery, [
@@ -862,7 +846,7 @@ app.post('/api/telegram/widget-auth', (req, res) => {
         } else {
             // Create new user
             const insertQuery = `
-                INSERT INTO users (telegram_id, username, first_name, last_name, created_at, last_login)
+                INSERT INTO users (telegram_id, username, first_name, last_name, created_at, last_seen)
                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             `;
             db.run(insertQuery, [
@@ -1116,13 +1100,13 @@ function convertKeyboardLayout(text) {
     
     // Convert RU to EN
     for (const [ru, en] of Object.entries(ruToEn)) {
-        result = result.replace(new RegExp(ru, 'g'), en);
+        result = result.replace(new RegExp(ru.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), en);
     }
     
     // If no conversion happened, try EN to RU
     if (result === text) {
         for (const [en, ru] of Object.entries(enToRu)) {
-            result = result.replace(new RegExp(en, 'g'), ru);
+            result = result.replace(new RegExp(en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ru);
         }
     }
     
@@ -1253,7 +1237,7 @@ function reverseTransliterate(text) {
     const sortedKeys = Object.keys(reverseTranslitMap).sort((a, b) => b.length - a.length);
     
     for (const key of sortedKeys) {
-        result = result.replace(new RegExp(key, 'g'), reverseTranslitMap[key]);
+        result = result.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), reverseTranslitMap[key]);
     }
     
     return result;
@@ -2261,12 +2245,12 @@ app.get('/api/admin/statistics', (req, res) => {
         "SELECT COUNT(*) as total_requests_today FROM user_requests WHERE DATE(created_at) = DATE('now')",
         // Unique visitors today
         "SELECT COUNT(DISTINCT ip_address) as unique_visitors_today FROM user_requests WHERE DATE(created_at) = DATE('now')",
-        // Device statistics (from user_requests)
-        "SELECT device_type, COUNT(DISTINCT ip_address) as count FROM user_requests WHERE device_type IS NOT NULL GROUP BY device_type",
-        // Browser statistics (from user_requests)
-        "SELECT browser, COUNT(DISTINCT ip_address) as count FROM user_requests WHERE browser IS NOT NULL GROUP BY browser",
-        // OS statistics (from user_requests)
-        "SELECT os, COUNT(DISTINCT ip_address) as count FROM user_requests WHERE os IS NOT NULL GROUP BY os",
+        // Device statistics
+        'SELECT device_type, COUNT(*) as count FROM users GROUP BY device_type',
+        // Browser statistics
+        'SELECT browser, COUNT(*) as count FROM users GROUP BY browser',
+        // OS statistics
+        'SELECT os, COUNT(*) as count FROM users GROUP BY os',
         // Language statistics
         'SELECT language_code, COUNT(*) as count FROM users WHERE language_code IS NOT NULL GROUP BY language_code',
         // Top endpoints
@@ -2595,7 +2579,7 @@ app.get('/api/admin/search', (req, res) => {
 });
 
 // Approve channel
-app.post("/api/admin/channels/:id/approve", (req, res) => {
+app.post("/api/admin/channels/:id/approve", checkUser, (req, res) => {
     const channelId = req.params.id;
     
     const query = 'UPDATE channels SET status = ? WHERE id = ?';
@@ -2648,7 +2632,7 @@ app.delete('/api/admin/channels/:id', (req, res) => {
 });
 
 // Approve review
-app.post("/api/admin/reviews/:id/approve", (req, res) => {
+app.post("/api/admin/reviews/:id/approve", checkUser, (req, res) => {
     const reviewId = req.params.id;
     
     const query = 'UPDATE reviews SET status = ? WHERE id = ?';
