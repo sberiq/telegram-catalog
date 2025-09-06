@@ -941,6 +941,38 @@ function showAdminPanel() {
 }
 
 // Admin Panel Functions
+function saveAdminState() {
+    localStorage.setItem('isAdminLoggedIn', 'true');
+    localStorage.setItem('currentAdmin', JSON.stringify(currentAdmin));
+}
+
+function clearAdminState() {
+    localStorage.removeItem('isAdminLoggedIn');
+    localStorage.removeItem('currentAdmin');
+}
+
+function restoreAdminState() {
+    const savedState = localStorage.getItem('isAdminLoggedIn');
+    if (savedState === 'true') {
+        const savedAdmin = localStorage.getItem('currentAdmin');
+        if (savedAdmin) {
+            isAdminLoggedIn = true;
+            currentAdmin = JSON.parse(savedAdmin);
+            // Hide login form and show dashboard
+            document.getElementById('adminLoginForm').style.display = 'none';
+            document.getElementById('adminDashboard').style.display = 'block';
+            document.getElementById('logoutBtn').style.display = 'block';
+            // Switch to admin page
+            hideAllPages();
+            document.getElementById('adminPanelPage').classList.remove('hidden');
+            currentPage = 'admin';
+            loadAdminContent();
+            return true;
+        }
+    }
+    return false;
+}
+
 async function handleAdminLogin(e) {
     e.preventDefault();
     console.log('Admin login form submitted');
@@ -968,6 +1000,8 @@ async function handleAdminLogin(e) {
             console.log('Login successful, switching to admin panel');
             isAdminLoggedIn = true;
             currentAdmin = result.admin; // Store admin info
+            // Save admin state to localStorage
+            saveAdminState();
             // Hide login form and show dashboard ONLY after successful login
             document.getElementById('adminLoginForm').style.display = 'none';
             document.getElementById('adminDashboard').style.display = 'block';
@@ -1007,6 +1041,8 @@ async function handleAdminLogin(e) {
 function logoutAdmin() {
     isAdminLoggedIn = false;
     currentAdmin = null;
+    // Clear admin state from localStorage
+    clearAdminState();
     document.getElementById('adminLoginForm').style.display = 'block';
     document.getElementById('adminDashboard').style.display = 'none';
     document.getElementById('logoutBtn').style.display = 'none';
@@ -1020,8 +1056,12 @@ function logoutAdmin() {
 async function loadAdminContent() {
     // Check if admin is logged in
     if (!isAdminLoggedIn) {
-        showError('Необходима авторизация');
-        return;
+        // Try to restore admin state first
+        const restored = restoreAdminState();
+        if (!restored) {
+            showError('Необходима авторизация');
+            return;
+        }
     }
     await showAdminTab(currentAdminTab);
 }
@@ -2258,10 +2298,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize selected tags display
     updateSelectedTagsDisplay();
     
-    // Ensure admin dashboard is hidden on page load
-    document.getElementById('adminDashboard').style.display = 'none';
-    document.getElementById('logoutBtn').style.display = 'none';
-    isAdminLoggedIn = false;
+    // Try to restore admin state
+    const adminRestored = restoreAdminState();
+    if (!adminRestored) {
+        // Ensure admin dashboard is hidden on page load if not logged in
+        document.getElementById('adminDashboard').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = 'none';
+        isAdminLoggedIn = false;
+    }
     
     // Add main-page class for black and white theme
     document.body.classList.add('main-page');
