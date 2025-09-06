@@ -39,6 +39,17 @@ function generateSessionToken() {
     return 'tg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
+// Helper function to get authorization headers
+function getAuthHeaders() {
+    const initData = window.Telegram.WebApp.initData;
+    if (initData) {
+        return {
+            'Authorization': `tma ${initData}`
+        };
+    }
+    return {};
+}
+
 // Authenticate with Telegram Widget data
 async function authenticateWithTelegramWidget(user) {
     try {
@@ -53,13 +64,9 @@ async function authenticateWithTelegramWidget(user) {
         const response = await fetch('/api/auth/signin', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify({ 
-                initData: initData
-            }),
-            credentials: 'include' // Important for cookies
+                ...getAuthHeaders(),
+                'Authorization': `tma ${initData}`
+            }
         });
         
         const result = await response.json();
@@ -161,10 +168,6 @@ function loginWithTelegram() {
 
 // Logout user
 function logoutUser() {
-    // Clear cookies by setting them to expire
-    document.cookie = 'ACCESS_TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    document.cookie = 'REFRESH_TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    
     currentUser = null;
     sessionToken = null;
     updateAuthUI();
@@ -697,9 +700,10 @@ document.getElementById('addChannelForm').addEventListener('submit', async (e) =
         const response = await fetch('/api/channels', {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify(channelData)
         });
         
@@ -737,9 +741,10 @@ async function handleAddReview(e) {
         const response = await fetch(`/api/channels/${currentChannelId}/reviews`, {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify(reviewData)
         });
         
@@ -898,9 +903,10 @@ async function handleAdminLogin(e) {
         const response = await fetch('/api/admin/login', {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify({ username, password })
         });
         
@@ -1354,9 +1360,10 @@ async function handleAddTag(e) {
         const response = await fetch('/api/admin/tags', {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify({ name: tagName })
         });
         
@@ -1393,9 +1400,10 @@ document.getElementById('addChannelForm').addEventListener('submit', async (e) =
         const response = await fetch('/api/channels', {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify(channelData)
         });
         
@@ -1610,9 +1618,10 @@ async function handleAddAdmin(e) {
         const response = await fetch('/api/admin/admins', {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify({ username, password })
         });
         
@@ -1943,6 +1952,7 @@ async function verifyUser(userId) {
         const response = await fetch(`/api/admin/users/${userId}/verify`, {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             }
         });
@@ -1964,6 +1974,7 @@ async function unverifyUser(userId) {
         const response = await fetch(`/api/admin/users/${userId}/unverify`, {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             }
         });
@@ -1993,9 +2004,10 @@ async function linkAdminTelegram(adminId) {
         const response = await fetch('/api/admin/link-telegram', {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify({
                 adminId: adminId,
                 telegramId: parseInt(telegramId)
@@ -2024,9 +2036,10 @@ async function unlinkAdminTelegram(adminId) {
         const response = await fetch('/api/admin/unlink-telegram', {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify({
                 adminId: adminId
             })
@@ -2058,9 +2071,10 @@ async function blockUser(userId) {
         const response = await fetch(`/api/admin/users/${userId}/block`, {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify({
                 reason: reason
             })
@@ -2088,6 +2102,7 @@ async function unblockUser(userId) {
         const response = await fetch(`/api/admin/users/${userId}/unblock`, {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             }
         });
@@ -2111,17 +2126,22 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Telegram Widget will be initialized automatically when modal opens
     
-    // Check for existing JWT session
+    // Check for existing session by trying to authenticate
+    const initData = window.Telegram.WebApp.initData;
+    if (initData) {
         fetch('/api/user/me', {
-        credentials: 'include' // Important for cookies
-    })
-    .then(response => {
-        if (response.ok) {
-            return response.json();
-        } else {
-            throw new Error('Not authenticated');
-        }
-    })
+            headers: {
+                ...getAuthHeaders(),
+                'Authorization': `tma ${initData}`
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            } else {
+                throw new Error('Not authenticated');
+            }
+        })
         .then(user => {
             if (user.id) {
                 currentUser = user;
@@ -2129,10 +2149,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         })
         .catch(() => {
-        // Not authenticated, clear any existing data
+            // Not authenticated, clear any existing data
+            currentUser = null;
+            updateAuthUI();
+        });
+    } else {
+        // No initData available
         currentUser = null;
         updateAuthUI();
-    });
+    }
     
     // Add event listeners
     document.getElementById('loginForm').addEventListener('submit', handleAdminLogin);
@@ -2393,11 +2418,12 @@ async function saveProfile() {
     try {
         const response = await fetch('/api/user/profile', {
             method: 'PUT',
-            credentials: 'include',
+            
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify({
                 nickname: currentUser.nickname,
                 bio: bio,
@@ -2472,9 +2498,10 @@ async function linkAdminWithUser(telegramUserId) {
         const response = await fetch('/api/admin/link-user', {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify({
                 adminId: currentAdmin.id,
                 telegramUserId: telegramUserId
@@ -2506,9 +2533,10 @@ async function unlinkAdminFromUser() {
         const response = await fetch('/api/admin/unlink-user', {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify({
                 adminId: currentAdmin.id
             })
@@ -2539,6 +2567,7 @@ async function approveChannel(channelId) {
         const response = await fetch(`/api/admin/channels/${channelId}/approve`, {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             }
         });
@@ -2568,9 +2597,10 @@ async function rejectChannel(channelId) {
         const response = await fetch(`/api/admin/channels/${channelId}/reject`, {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify({ reason })
         });
         
@@ -2596,6 +2626,7 @@ async function approveReview(reviewId) {
         const response = await fetch(`/api/admin/reviews/${reviewId}/approve`, {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             }
         });
@@ -2625,9 +2656,10 @@ async function rejectReview(reviewId) {
         const response = await fetch(`/api/admin/reviews/${reviewId}/reject`, {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify({ reason })
         });
         
@@ -2754,11 +2786,12 @@ async function handleEditChannel(e) {
     try {
         const response = await fetch(`/api/admin/channels/${channelId}`, {
             method: 'PUT',
-            credentials: 'include',
+            
             headers: {
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            credentials: 'include',
+            
             body: JSON.stringify(formData)
         });
         
