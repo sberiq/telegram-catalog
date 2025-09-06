@@ -12,8 +12,8 @@ const PORT = process.env.PORT || 3000;
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'jwt_at_secret_telegram_catalog';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'jwt_rt_secret_telegram_catalog';
 
-// Telegram Bot Token (нужно заменить на реальный токен вашего бота)
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN_HERE';
+// Telegram Bot Token
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '7579103725:AAHZOYT8QpFAn45fUHw2XeUkpeI1SYeeX5g';
 
 // Middleware
 app.use(cors({
@@ -1358,9 +1358,8 @@ app.get('/api/tags', (req, res) => {
 });
 
 // Add new channel
-app.post('/api/channels', (req, res) => {
+app.post('/api/channels', authenticateJWT, (req, res) => {
     const { title, description, link, tags } = req.body;
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
     
     if (!title || !description || !link) {
         res.status(400).json({ error: 'Missing required fields' });
@@ -1373,28 +1372,25 @@ app.post('/api/channels', (req, res) => {
         return;
     }
     
-    // Get user ID from session and check if user is blocked
-    let userId = null;
-    if (sessionToken) {
-        const userQuery = `
-            SELECT u.id, u.is_blocked 
-            FROM users u
-            JOIN user_sessions us ON u.id = us.user_id
-            WHERE us.session_token = ?
-        `;
-        db.get(userQuery, [sessionToken], (err, row) => {
-            if (!err && row) {
-                if (row.is_blocked) {
-                    res.status(403).json({ error: 'Ваш аккаунт заблокирован' });
-                    return;
-                }
-                userId = row.id;
-            }
-            insertChannel();
-        });
-    } else {
+    // Get user ID from JWT token and check if user is blocked
+    const userId = req.user.id;
+    
+    // Check if user is blocked
+    const userQuery = 'SELECT is_blocked FROM users WHERE id = ?';
+    db.get(userQuery, [userId], (err, row) => {
+        if (err) {
+            console.error('Error checking user status:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (row && row.is_blocked) {
+            res.status(403).json({ error: 'Ваш аккаунт заблокирован' });
+            return;
+        }
+        
         insertChannel();
-    }
+    });
     
     function insertChannel() {
         const insertQuery = `
@@ -1437,10 +1433,9 @@ app.post('/api/channels', (req, res) => {
 });
 
 // Add review
-app.post('/api/channels/:id/reviews', (req, res) => {
+app.post('/api/channels/:id/reviews', authenticateJWT, (req, res) => {
     const channelId = req.params.id;
     const { text, rating, is_anonymous } = req.body;
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
     
     if (!text || !rating) {
         res.status(400).json({ error: 'Missing required fields' });
@@ -1452,37 +1447,41 @@ app.post('/api/channels/:id/reviews', (req, res) => {
         return;
     }
     
-    // Get user info from session and check if user is blocked
-    let userId = null;
-    let userDisplayName = 'Анонимный пользователь';
-    let isAnonymousReview = is_anonymous || false;
+    // Get user info from JWT token and check if user is blocked
+    const userId = req.user.id;
+    const isAnonymousReview = is_anonymous || false;
     
-    if (sessionToken) {
-        const userQuery = `
-            SELECT u.id, u.first_name, u.last_name, u.username, u.is_blocked
-            FROM users u
-            JOIN user_sessions s ON u.id = s.user_id
-            WHERE s.session_token = ?
-        `;
-        db.get(userQuery, [sessionToken], (err, user) => {
-            if (!err && user) {
-                if (user.is_blocked) {
-                    res.status(403).json({ error: 'Ваш аккаунт заблокирован' });
-                    return;
-                }
-                userId = user.id;
-                if (isAnonymousReview) {
-                    userDisplayName = 'Анонимный пользователь';
-                } else {
-                    userDisplayName = user.first_name + (user.last_name ? ' ' + user.last_name : '');
-                    if (user.username) {
-                        userDisplayName += ` (@${user.username})`;
-                    }
-                }
+    // Check if user is blocked
+    const userQuery = `
+        SELECT u.first_name, u.last_name, u.username, u.is_blocked
+        FROM users u
+        WHERE u.id = ?
+    `;
+    db.get(userQuery, [userId], (err, user) => {
+        if (err) {
+            console.error('Error getting user info:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        
+        if (user.is_blocked) {
+            res.status(403).json({ error: 'Ваш аккаунт заблокирован' });
+            return;
+        }
+        
+        let userDisplayName = 'Анонимный пользователь';
+        if (!isAnonymousReview) {
+            userDisplayName = user.first_name + (user.last_name ? ' ' + user.last_name : '');
+            if (user.username) {
+                userDisplayName += ` (@${user.username})`;
             }
-            insertReview();
-        });
-    } else {
+        }
+        
         insertReview();
     }
     
@@ -1524,55 +1523,6 @@ app.post('/api/channels/:id/reviews', (req, res) => {
 });
 
 // User API Routes
-
-// Get current user info
-app.get('/api/user/me', (req, res) => {
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!sessionToken) {
-        res.status(401).json({ error: 'No session token provided' });
-        return;
-    }
-    
-    const query = `
-        SELECT u.*, us.session_token, up.nickname, up.bio, up.avatar_url as profile_avatar_url, up.is_verified,
-               a.id as admin_id, a.username as admin_username
-        FROM users u
-        JOIN user_sessions us ON u.id = us.user_id
-        LEFT JOIN user_profiles up ON u.id = up.user_id
-        LEFT JOIN admins a ON u.telegram_id = a.telegram_user_id
-        WHERE us.session_token = ?
-        ORDER BY us.created_at DESC
-        LIMIT 1
-    `;
-    
-    db.get(query, [sessionToken], (err, user) => {
-        if (err) {
-            console.error('Error getting user info:', err);
-            res.status(500).json({ error: 'Database error' });
-            return;
-        }
-        
-        if (!user) {
-            res.status(401).json({ error: 'Invalid session' });
-            return;
-        }
-        
-        res.json({
-            id: user.telegram_id,
-            username: user.username,
-            first_name: user.first_name,
-            last_name: user.last_name,
-            language_code: user.language_code,
-            is_premium: user.is_premium,
-            nickname: user.nickname,
-            bio: user.bio,
-            is_verified: user.is_verified || false,
-            is_admin: !!user.admin_id,
-            admin_username: user.admin_username
-        });
-    });
-});
 
 // Get user profile by ID
 app.get('/api/user/:userId/profile', (req, res) => {
@@ -1721,60 +1671,39 @@ app.put('/api/user/profile', (req, res) => {
 });
 
 // Add/remove favorite channel
-app.post('/api/user/favorites/:channelId', (req, res) => {
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/user/favorites/:channelId', authenticateJWT, (req, res) => {
     const channelId = req.params.channelId;
+    const userId = req.user.id;
     
-    if (!sessionToken) {
-        res.status(401).json({ error: 'No session token provided' });
-        return;
-    }
-    
-    // Get user ID
-    const userQuery = `
-        SELECT u.id FROM users u
-        JOIN user_sessions us ON u.id = us.user_id
-        WHERE us.session_token = ?
-        ORDER BY us.created_at DESC
-        LIMIT 1
-    `;
-    
-    db.get(userQuery, [sessionToken], (err, user) => {
-        if (err || !user) {
-            res.status(401).json({ error: 'Invalid session' });
+    // Check if already favorite
+    const checkQuery = 'SELECT id FROM user_favorite_channels WHERE user_id = ? AND channel_id = ?';
+    db.get(checkQuery, [userId, channelId], (err, existing) => {
+        if (err) {
+            res.status(500).json({ error: 'Database error' });
             return;
         }
         
-        // Check if already favorite
-        const checkQuery = 'SELECT id FROM user_favorite_channels WHERE user_id = ? AND channel_id = ?';
-        db.get(checkQuery, [user.id, channelId], (err, existing) => {
-            if (err) {
-                res.status(500).json({ error: 'Database error' });
-                return;
-            }
-            
-            if (existing) {
-                // Remove from favorites
-                const deleteQuery = 'DELETE FROM user_favorite_channels WHERE user_id = ? AND channel_id = ?';
-                db.run(deleteQuery, [user.id, channelId], (err) => {
-                    if (err) {
-                        res.status(500).json({ error: 'Database error' });
-                        return;
-                    }
-                    res.json({ success: true, message: 'Removed from favorites', is_favorite: false });
-                });
-            } else {
-                // Add to favorites
-                const insertQuery = 'INSERT INTO user_favorite_channels (user_id, channel_id) VALUES (?, ?)';
-                db.run(insertQuery, [user.id, channelId], (err) => {
-                    if (err) {
-                        res.status(500).json({ error: 'Database error' });
-                        return;
-                    }
-                    res.json({ success: true, message: 'Added to favorites', is_favorite: true });
-                });
-            }
-        });
+        if (existing) {
+            // Remove from favorites
+            const deleteQuery = 'DELETE FROM user_favorite_channels WHERE user_id = ? AND channel_id = ?';
+            db.run(deleteQuery, [userId, channelId], (err) => {
+                if (err) {
+                    res.status(500).json({ error: 'Database error' });
+                    return;
+                }
+                res.json({ success: true, message: 'Removed from favorites', is_favorite: false });
+            });
+        } else {
+            // Add to favorites
+            const insertQuery = 'INSERT INTO user_favorite_channels (user_id, channel_id) VALUES (?, ?)';
+            db.run(insertQuery, [userId, channelId], (err) => {
+                if (err) {
+                    res.status(500).json({ error: 'Database error' });
+                    return;
+                }
+                res.json({ success: true, message: 'Added to favorites', is_favorite: true });
+            });
+        }
     });
 });
 
@@ -2869,41 +2798,23 @@ app.use((err, req, res, next) => {
 });
 
 // Like/Dislike review
-app.post('/api/reviews/:reviewId/like', (req, res) => {
+app.post('/api/reviews/:reviewId/like', authenticateJWT, (req, res) => {
     const reviewId = req.params.reviewId;
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
     const { isLike } = req.body;
+    const userId = req.user.id;
     
-    if (!sessionToken) {
-        res.status(401).json({ error: 'No session token provided' });
-        return;
-    }
-    
-    // Get user ID from session
-    const userQuery = `
-        SELECT u.id FROM users u
-        JOIN user_sessions us ON u.id = us.user_id
-        WHERE us.session_token = ?
+    // Insert or update like/dislike
+    const likeQuery = `
+        INSERT OR REPLACE INTO review_likes (review_id, user_id, is_like)
+        VALUES (?, ?, ?)
     `;
     
-    db.get(userQuery, [sessionToken], (err, user) => {
-        if (err || !user) {
-            res.status(401).json({ error: 'Invalid session' });
+    db.run(likeQuery, [reviewId, userId, isLike], function(err) {
+        if (err) {
+            console.error('Error liking review:', err);
+            res.status(500).json({ error: 'Database error' });
             return;
         }
-        
-        // Insert or update like/dislike
-        const likeQuery = `
-            INSERT OR REPLACE INTO review_likes (review_id, user_id, is_like)
-            VALUES (?, ?, ?)
-        `;
-        
-        db.run(likeQuery, [reviewId, user.id, isLike], function(err) {
-            if (err) {
-                console.error('Error liking review:', err);
-                res.status(500).json({ error: 'Database error' });
-                return;
-            }
             
             // Get updated like/dislike counts
             const countQuery = `
@@ -2932,35 +2843,17 @@ app.post('/api/reviews/:reviewId/like', (req, res) => {
 });
 
 // Remove like/dislike
-app.delete('/api/reviews/:reviewId/like', (req, res) => {
+app.delete('/api/reviews/:reviewId/like', authenticateJWT, (req, res) => {
     const reviewId = req.params.reviewId;
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    const userId = req.user.id;
     
-    if (!sessionToken) {
-        res.status(401).json({ error: 'No session token provided' });
-        return;
-    }
-    
-    // Get user ID from session
-    const userQuery = `
-        SELECT u.id FROM users u
-        JOIN user_sessions us ON u.id = us.user_id
-        WHERE us.session_token = ?
+    // Remove like/dislike
+    const deleteQuery = `
+        DELETE FROM review_likes 
+        WHERE review_id = ? AND user_id = ?
     `;
-    
-    db.get(userQuery, [sessionToken], (err, user) => {
-        if (err || !user) {
-            res.status(401).json({ error: 'Invalid session' });
-            return;
-        }
         
-        // Remove like/dislike
-        const deleteQuery = `
-            DELETE FROM review_likes 
-            WHERE review_id = ? AND user_id = ?
-        `;
-        
-        db.run(deleteQuery, [reviewId, user.id], function(err) {
+    db.run(deleteQuery, [reviewId, userId], function(err) {
             if (err) {
                 console.error('Error removing like:', err);
                 res.status(500).json({ error: 'Database error' });

@@ -55,7 +55,7 @@ async function authenticateWithTelegramWidget(user) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
+            body: JSON.stringify({ 
                 initData: initData
             }),
             credentials: 'include' // Important for cookies
@@ -2102,7 +2102,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Telegram Widget will be initialized automatically when modal opens
     
     // Check for existing JWT session
-    fetch('/api/user/me', {
+        fetch('/api/user/me', {
         credentials: 'include' // Important for cookies
     })
     .then(response => {
@@ -2112,13 +2112,13 @@ document.addEventListener('DOMContentLoaded', () => {
             throw new Error('Not authenticated');
         }
     })
-    .then(user => {
-        if (user.id) {
-            currentUser = user;
-            updateAuthUI();
-        }
-    })
-    .catch(() => {
+        .then(user => {
+            if (user.id) {
+                currentUser = user;
+                updateAuthUI();
+            }
+        })
+        .catch(() => {
         // Not authenticated, clear any existing data
         currentUser = null;
         updateAuthUI();
@@ -2384,9 +2384,9 @@ async function saveProfile() {
         const response = await fetch('/api/user/profile', {
             method: 'PUT',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${sessionToken}`
+                'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify({
                 nickname: currentUser.nickname,
                 bio: bio,
@@ -2421,9 +2421,7 @@ async function toggleFavorite(channelId) {
     try {
         const response = await fetch(`/api/user/favorites/${channelId}`, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${sessionToken}`
-            }
+            credentials: 'include'
         });
         
         const result = await response.json();
