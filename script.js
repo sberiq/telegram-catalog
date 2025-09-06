@@ -969,6 +969,10 @@ async function handleAdminLogin(e) {
             document.getElementById('adminLoginForm').style.display = 'none';
             document.getElementById('adminDashboard').style.display = 'block';
             document.getElementById('logoutBtn').style.display = 'block';
+            // Switch to admin page
+            hideAllPages();
+            document.getElementById('adminPage').classList.remove('hidden');
+            currentPage = 'admin';
             loadAdminContent();
             showSuccess('Успешный вход в админ-панель');
         } else {
@@ -992,9 +996,14 @@ async function handleAdminLogin(e) {
 
 function logoutAdmin() {
     isAdminLoggedIn = false;
+    currentAdmin = null;
     document.getElementById('adminLoginForm').style.display = 'block';
     document.getElementById('adminDashboard').style.display = 'none';
     document.getElementById('logoutBtn').style.display = 'none';
+    // Switch back to main page
+    hideAllPages();
+    document.getElementById('mainPage').classList.remove('hidden');
+    currentPage = 'main';
     showSuccess('Вы вышли из админ-панели');
 }
 

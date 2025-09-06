@@ -361,6 +361,18 @@ function initializeDatabase() {
         )
     `);
 
+    // Create admins table
+    db.run(`
+        CREATE TABLE IF NOT EXISTS admins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            telegram_user_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (telegram_user_id) REFERENCES users (telegram_id)
+        )
+    `);
+
     // Create channel_admins table
     db.run(`
         CREATE TABLE IF NOT EXISTS channel_admins (
