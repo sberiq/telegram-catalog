@@ -1485,7 +1485,7 @@ app.post('/api/channels/:id/reviews', authenticateJWT, (req, res) => {
         }
         
         insertReview();
-    }
+    });
     
     function insertReview() {
         // Check if channel exists
