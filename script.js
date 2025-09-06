@@ -57,7 +57,7 @@ async function authenticateWithTelegramWidget(user) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
+            body: JSON.stringify({ 
                 id: user.id,
                 first_name: user.first_name,
                 last_name: user.last_name,
@@ -143,10 +143,10 @@ function updateAuthUI() {
         loginBtn.style.display = 'flex';
         userStatus.classList.add('hidden');
         
-        // Disable auth-required elements
-        document.querySelectorAll('.secondary-button').forEach(btn => {
-            if (btn.textContent.includes('Добавить канал') || btn.textContent.includes('Оставить отзыв')) {
-                btn.classList.add('auth-required');
+        // Remove auth-required restrictions for channels and reviews
+        document.querySelectorAll('.auth-required').forEach(el => {
+            if (el.textContent.includes('Добавить канал') || el.textContent.includes('Оставить отзыв')) {
+                el.classList.remove('auth-required');
             }
         });
     }
@@ -212,8 +212,6 @@ function showSearchPage() {
 }
 
 function showAddChannelPage() {
-    if (!requireAuth()) return;
-    
     hideAllPages();
     document.getElementById('addChannelPage').classList.remove('hidden');
     currentPage = 'addChannel';
@@ -613,6 +611,7 @@ function displayChannelDetails(channel) {
                         <div class="review-header">
                             <span class="review-nickname">
                                 ${review.is_anonymous ? 'Анонимно' : (review.nickname || 'Пользователь')}
+                                ${review.user_id ? '<span class="verified-badge" title="Авторизованный пользователь">✓</span>' : ''}
                             </span>
                             <span class="review-date">${formatDate(review.created_at)}</span>
                         </div>
@@ -641,6 +640,11 @@ function displayChannelDetails(channel) {
                     </div>
                     
                     <div class="review-form-group">
+                        <label for="reviewNickname">Ваш ник (необязательно):</label>
+                        <input type="text" id="reviewNickname" class="form-input" placeholder="Введите ваш ник или оставьте пустым для анонимности" maxlength="50">
+                    </div>
+                    
+                    <div class="review-form-group">
                         <label for="reviewText">Текст отзыва:</label>
                         <textarea id="reviewText" class="form-textarea" placeholder="Оставьте свой отзыв..." required></textarea>
                     </div>
@@ -654,7 +658,7 @@ function displayChannelDetails(channel) {
                     
                     <div class="review-form-group">
                         <p class="user-info-display" id="userInfoDisplay">
-                            Отзыв будет добавлен от вашего имени в Telegram
+                            ${isUserAuthenticated() ? 'Отзыв будет добавлен от вашего имени в Telegram ✓' : 'Отзыв будет добавлен анонимно'}
                         </p>
                     </div>
                     
@@ -670,10 +674,41 @@ function displayChannelDetails(channel) {
     // Add anonymous review checkbox handler
     document.getElementById('anonymousReview').addEventListener('change', function() {
         const userInfoDisplay = document.getElementById('userInfoDisplay');
+        const nicknameField = document.getElementById('reviewNickname');
+        
         if (this.checked) {
             userInfoDisplay.textContent = 'Отзыв будет добавлен анонимно';
+            nicknameField.disabled = true;
+            nicknameField.value = '';
         } else {
-            userInfoDisplay.textContent = 'Отзыв будет добавлен от вашего имени в Telegram';
+            nicknameField.disabled = false;
+            if (isUserAuthenticated()) {
+                userInfoDisplay.textContent = 'Отзыв будет добавлен от вашего имени в Telegram ✓';
+            } else {
+                userInfoDisplay.textContent = 'Отзыв будет добавлен с указанным ником или анонимно';
+            }
+        }
+    });
+    
+    // Add nickname field handler
+    document.getElementById('reviewNickname').addEventListener('input', function() {
+        const userInfoDisplay = document.getElementById('userInfoDisplay');
+        const anonymousCheckbox = document.getElementById('anonymousReview');
+        
+        if (!anonymousCheckbox.checked) {
+            if (this.value.trim()) {
+                if (isUserAuthenticated()) {
+                    userInfoDisplay.textContent = `Отзыв будет добавлен от ${this.value} (Telegram ✓)`;
+                } else {
+                    userInfoDisplay.textContent = `Отзыв будет добавлен от ${this.value}`;
+                }
+            } else {
+                if (isUserAuthenticated()) {
+                    userInfoDisplay.textContent = 'Отзыв будет добавлен от вашего имени в Telegram ✓';
+                } else {
+                    userInfoDisplay.textContent = 'Отзыв будет добавлен анонимно';
+                }
+            }
         }
     });
 }
@@ -699,8 +734,6 @@ function displayTags(tags) {
 document.getElementById('addChannelForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    if (!requireAuth()) return;
-    
     const formData = new FormData(e.target);
     const channelData = {
         title: document.getElementById('channelName').value,
@@ -714,10 +747,8 @@ document.getElementById('addChannelForm').addEventListener('submit', async (e) =
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
-                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            
             credentials: 'include',
             body: JSON.stringify(channelData)
         });
@@ -739,17 +770,19 @@ document.getElementById('addChannelForm').addEventListener('submit', async (e) =
 async function handleAddReview(e) {
     e.preventDefault();
     
-    if (!requireAuth()) return;
-    
     if (selectedRating === 0) {
         showError('Пожалуйста, выберите оценку');
         return;
     }
     
+    const nickname = document.getElementById('reviewNickname').value.trim();
+    const isAnonymous = document.getElementById('anonymousReview').checked;
+    
     const reviewData = {
         text: document.getElementById('reviewText').value,
         rating: selectedRating,
-        is_anonymous: document.getElementById('anonymousReview').checked
+        is_anonymous: isAnonymous,
+        nickname: nickname
     };
     
     try {
@@ -757,10 +790,8 @@ async function handleAddReview(e) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
-                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
-            
             credentials: 'include',
             body: JSON.stringify(reviewData)
         });

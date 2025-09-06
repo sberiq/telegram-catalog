@@ -1221,6 +1221,23 @@ body.main-page .info-instruction {
     font-size: 14px;
     font-weight: 600;
     color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.verified-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    background-color: #10b981;
+    color: #ffffff;
+    border-radius: 50%;
+    font-size: 10px;
+    font-weight: bold;
+    margin-left: 4px;
 }
 
 .review-date {

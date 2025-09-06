@@ -974,6 +974,59 @@ function checkUser(req, res, next) {
     });
 }
 
+// Optional user check middleware - allows anonymous users
+function checkUserOptional(req, res, next) {
+    const userId = req.header('x-user-id');
+    
+    if (!userId) {
+        // No user ID provided, proceed as anonymous user
+        req.user = null;
+        return next();
+    }
+    
+    // Find user by ID
+    const userQuery = 'SELECT * FROM users WHERE id = ?';
+    db.get(userQuery, [userId], (err, user) => {
+        if (err) {
+            console.error('Error getting user:', err);
+            // If error getting user, proceed as anonymous
+            req.user = null;
+            return next();
+        }
+        
+        if (!user) {
+            // User not found, proceed as anonymous
+            req.user = null;
+            return next();
+        }
+        
+        // Check if user is blocked
+        if (user.is_blocked) {
+            return res.status(403).json({ error: 'Ваш аккаунт заблокирован' });
+        }
+        
+        // Check admin status
+        const adminQuery = 'SELECT * FROM admins WHERE telegram_user_id = ?';
+        db.get(adminQuery, [user.telegram_id], (err, admin) => {
+            if (err) {
+                console.error('Error checking admin status:', err);
+            }
+            
+            req.user = {
+                id: user.id,
+                telegram_id: user.telegram_id,
+                username: user.username,
+                first_name: user.first_name,
+                last_name: user.last_name,
+                is_admin: !!admin,
+                admin_username: admin ? admin.username : null
+            };
+            
+            next();
+        });
+    });
+}
+
 // Logout endpoint
 app.post('/api/auth/logout', (req, res) => {
     res.clearCookie('telegram_session');
@@ -1565,11 +1618,7 @@ app.get('/api/tags', (req, res) => {
 });
 
 // Add new channel
-app.post("/api/channels", checkUser, (req, res) => {
-    if (!req.user) {
-        return res.status(401).json({ error: 'Authentication required' });
-    }
-    
+app.post("/api/channels", checkUserOptional, (req, res) => {
     const { title, description, link, tags } = req.body;
     
     if (!title || !description || !link) {
@@ -1583,25 +1632,10 @@ app.post("/api/channels", checkUser, (req, res) => {
         return;
     }
     
-    // Get user ID from JWT token and check if user is blocked
-    const userId = req.user.id;
+    // Get user ID if user is authenticated, otherwise use null for anonymous
+    const userId = req.user ? req.user.id : null;
     
-    // Check if user is blocked
-    const userQuery = 'SELECT is_blocked FROM users WHERE id = ?';
-    db.get(userQuery, [userId], (err, row) => {
-        if (err) {
-            console.error('Error checking user status:', err);
-            res.status(500).json({ error: 'Database error' });
-            return;
-        }
-        
-        if (row && row.is_blocked) {
-            res.status(403).json({ error: 'Ваш аккаунт заблокирован' });
-            return;
-        }
-        
-        insertChannel();
-    });
+    insertChannel();
     
     function insertChannel() {
         const insertQuery = `
@@ -1644,9 +1678,9 @@ app.post("/api/channels", checkUser, (req, res) => {
 });
 
 // Add review
-app.post("/api/channels/:id/reviews", checkUser, (req, res) => {
+app.post("/api/channels/:id/reviews", checkUserOptional, (req, res) => {
     const channelId = req.params.id;
-    const { text, rating, is_anonymous } = req.body;
+    const { text, rating, is_anonymous, nickname } = req.body;
     
     if (!text || !rating) {
         res.status(400).json({ error: 'Missing required fields' });
@@ -1658,43 +1692,33 @@ app.post("/api/channels/:id/reviews", checkUser, (req, res) => {
         return;
     }
     
-    // Get user info from JWT token and check if user is blocked
-    const userId = req.user.id;
-    const isAnonymousReview = is_anonymous || false;
+    // Get user info if authenticated, otherwise proceed as anonymous
+    const userId = req.user ? req.user.id : null;
+    let isAnonymousReview = is_anonymous || false;
     
-    // Check if user is blocked
-    const userQuery = `
-        SELECT u.first_name, u.last_name, u.username, u.is_blocked
-        FROM users u
-        WHERE u.id = ?
-    `;
-    db.get(userQuery, [userId], (err, user) => {
-        if (err) {
-            console.error('Error getting user info:', err);
-            res.status(500).json({ error: 'Database error' });
-            return;
-        }
-        
-        if (!user) {
-            res.status(404).json({ error: 'User not found' });
-            return;
-        }
-        
-        if (user.is_blocked) {
-            res.status(403).json({ error: 'Ваш аккаунт заблокирован' });
-            return;
-        }
-        
-        let userDisplayName = 'Анонимный пользователь';
-        if (!isAnonymousReview) {
-            userDisplayName = user.first_name + (user.last_name ? ' ' + user.last_name : '');
-            if (user.username) {
-                userDisplayName += ` (@${user.username})`;
+    let userDisplayName = 'Анонимный пользователь';
+    let isVerified = false;
+    
+    if (req.user && !isAnonymousReview) {
+        // User is authenticated and not anonymous
+        if (nickname && nickname.trim()) {
+            // Use provided nickname
+            userDisplayName = nickname.trim();
+        } else {
+            // Use Telegram name
+            userDisplayName = req.user.first_name + (req.user.last_name ? ' ' + req.user.last_name : '');
+            if (req.user.username) {
+                userDisplayName += ` (@${req.user.username})`;
             }
         }
-        
-        insertReview();
-    });
+        isVerified = true; // Mark as verified for authenticated users
+    } else if (!req.user && nickname && nickname.trim()) {
+        // Anonymous user with nickname
+        userDisplayName = nickname.trim();
+        isAnonymousReview = false; // Not anonymous if nickname provided
+    }
+    
+    insertReview();
     
     function insertReview() {
         // Check if channel exists
@@ -1968,7 +1992,7 @@ app.post('/api/admin/users/:userId/unverify', (req, res) => {
 });
 
 // Add channel admin
-app.post("/api/channels", checkUser, (req, res) => {
+app.post("/api/admin/channels/:channelId/admins", checkUser, (req, res) => {
     const channelId = req.params.channelId;
     const { adminUserId } = req.body;
     
@@ -2555,7 +2579,7 @@ app.get('/api/admin/search', (req, res) => {
 });
 
 // Approve channel
-app.post("/api/channels", checkUser, (req, res) => {
+app.post("/api/admin/channels/:id/approve", checkUser, (req, res) => {
     const channelId = req.params.id;
     
     const query = 'UPDATE channels SET status = ? WHERE id = ?';
