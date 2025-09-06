@@ -2,18 +2,80 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const path = require('path');
+const { parse, isValid } = require('@telegram-apps/init-data-node');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// JWT secrets
+const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'jwt_at_secret_telegram_catalog';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'jwt_rt_secret_telegram_catalog';
+
+// Telegram Bot Token (нужно заменить на реальный токен вашего бота)
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN_HERE';
+
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: true,
+    credentials: true
+}));
 app.use(express.json());
 app.use(express.static('.'));
 
+// JWT Authentication Middleware
+function authenticateJWT(req, res, next) {
+    const accessToken = req.cookies.ACCESS_TOKEN;
+    const refreshToken = req.cookies.REFRESH_TOKEN;
+    
+    if (!accessToken || !refreshToken) {
+        return res.status(401).json({ error: 'No authentication tokens' });
+    }
+    
+    try {
+        // Try to verify access token
+        const decoded = jwt.verify(accessToken, JWT_ACCESS_SECRET);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        // Access token expired, try to refresh
+        try {
+            const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+            
+            // Generate new tokens
+            const newAccessToken = jwt.sign(
+                { id: decoded.id, telegram_id: decoded.telegram_id, roles: decoded.roles },
+                JWT_ACCESS_SECRET,
+                { expiresIn: '15m' }
+            );
+            
+            const newRefreshToken = jwt.sign(
+                { id: decoded.id, telegram_id: decoded.telegram_id, roles: decoded.roles },
+                JWT_REFRESH_SECRET,
+                { expiresIn: '7d' }
+            );
+            
+            // Set new cookies
+            const cookieOptions = {
+                httpOnly: true,
+                secure: true,
+                path: '/',
+                sameSite: 'strict'
+            };
+            
+            res.cookie('ACCESS_TOKEN', newAccessToken, cookieOptions);
+            res.cookie('REFRESH_TOKEN', newRefreshToken, cookieOptions);
+            
+            req.user = decoded;
+            next();
+        } catch (refreshError) {
+            return res.status(401).json({ error: 'Invalid tokens' });
+        }
+    }
+}
+
 // User activity tracking middleware
 app.use((req, res, next) => {
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
     const userAgent = req.get('User-Agent') || '';
     const clientIP = getClientIP(req);
     
@@ -30,21 +92,6 @@ app.use((req, res, next) => {
             }
         });
     };
-    
-    if (sessionToken) {
-        // Update user activity for authenticated users
-        const updateQuery = `
-            UPDATE users 
-            SET last_activity = CURRENT_TIMESTAMP, total_requests = total_requests + 1
-            WHERE id = (SELECT user_id FROM user_sessions WHERE session_token = ?)
-        `;
-        
-        db.run(updateQuery, [sessionToken], (err) => {
-            if (err) {
-                console.error('Error updating user activity:', err);
-            }
-        });
-    }
     
     // Track all requests
     trackRequest();
@@ -480,15 +527,33 @@ app.post('/api/telegram/auth', (req, res) => {
 });
 
 // Telegram Widget Authentication
-app.post('/api/telegram/widget-auth', (req, res) => {
-    const { user, sessionToken } = req.body;
+// Telegram Mini App authentication endpoint
+app.post('/api/auth/signin', (req, res) => {
+    const { initData } = req.body;
     
-    if (!user || !user.id) {
-        res.status(400).json({ error: 'Invalid user data' });
+    if (!initData) {
+        res.status(400).json({ error: 'Missing initData' });
         return;
     }
     
     try {
+        // Validate initData with bot token
+        const isInitDataValid = isValid(initData, TELEGRAM_BOT_TOKEN);
+        
+        if (!isInitDataValid) {
+            res.status(400).json({ error: 'Invalid initData' });
+            return;
+        }
+        
+        // Parse initData and extract user information
+        const parsedData = parse(initData);
+        const user = parsedData.user;
+        
+        if (!user || !user.id) {
+            res.status(400).json({ error: 'Invalid user data in initData' });
+            return;
+        }
+        
         const userAgent = req.get('User-Agent') || '';
         const clientIP = getClientIP(req);
         const deviceInfo = parseUserAgent(userAgent);
@@ -532,22 +597,41 @@ app.post('/api/telegram/widget-auth', (req, res) => {
                 return;
             }
             
-            // Create session
-            const sessionQuery = `
-                INSERT INTO user_sessions 
-                (user_id, session_token, user_agent, ip_address, created_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            `;
+            const userId = this.lastID;
             
-            db.run(sessionQuery, [
-                this.lastID,
-                sessionToken,
-                userAgent,
-                clientIP
-            ], (err) => {
+            // Check if user is admin
+            const adminQuery = 'SELECT * FROM admins WHERE telegram_user_id = ?';
+            db.get(adminQuery, [user.id], (err, admin) => {
                 if (err) {
-                    console.error('Error creating session:', err);
+                    console.error('Error checking admin status:', err);
                 }
+                
+                const isAdmin = !!admin;
+                const roles = isAdmin ? ['admin'] : ['user'];
+                
+                // Create JWT tokens
+                const accessToken = jwt.sign(
+                    { id: userId, telegram_id: user.id, roles },
+                    JWT_ACCESS_SECRET,
+                    { expiresIn: '15m' }
+                );
+                
+                const refreshToken = jwt.sign(
+                    { id: userId, telegram_id: user.id, roles },
+                    JWT_REFRESH_SECRET,
+                    { expiresIn: '7d' }
+                );
+                
+                // Set cookies
+                const cookieOptions = {
+                    httpOnly: true,
+                    secure: true,
+                    path: '/',
+                    sameSite: 'strict'
+                };
+                
+                res.cookie('ACCESS_TOKEN', accessToken, cookieOptions);
+                res.cookie('REFRESH_TOKEN', refreshToken, cookieOptions);
                 
                 res.json({
                     success: true,
@@ -556,55 +640,137 @@ app.post('/api/telegram/widget-auth', (req, res) => {
                         id: user.id,
                         username: user.username,
                         first_name: user.first_name,
-                        last_name: user.last_name
+                        last_name: user.last_name,
+                        is_admin: isAdmin
                     }
                 });
             });
         });
         
     } catch (error) {
-        console.error('Error processing Telegram widget auth:', error);
+        console.error('Error processing Telegram Mini App auth:', error);
         res.status(500).json({ error: 'Authentication error' });
     }
 });
 
-// Get current user from session
+// Get current user from JWT token
 app.get('/api/user/me', (req, res) => {
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    const accessToken = req.cookies.ACCESS_TOKEN;
+    const refreshToken = req.cookies.REFRESH_TOKEN;
     
-    if (!sessionToken) {
-        res.status(401).json({ error: 'No session token' });
+    if (!accessToken || !refreshToken) {
+        res.status(401).json({ error: 'No authentication tokens' });
         return;
     }
     
-    const query = `
-        SELECT u.*, s.session_token
-        FROM users u
-        JOIN user_sessions s ON u.id = s.user_id
-        WHERE s.session_token = ?
-    `;
-    
-    db.get(query, [sessionToken], (err, row) => {
-        if (err) {
-            console.error('Error getting user:', err);
-            res.status(500).json({ error: 'Database error' });
-            return;
-        }
+    try {
+        // Try to verify access token
+        const decoded = jwt.verify(accessToken, JWT_ACCESS_SECRET);
         
-        if (!row) {
-            res.status(401).json({ error: 'Invalid session' });
-            return;
-        }
-        
-        res.json({
-            id: row.telegram_id,
-            username: row.username,
-            first_name: row.first_name,
-            last_name: row.last_name,
-            language_code: row.language_code,
-            is_premium: row.is_premium
+        // Get user from database
+        const query = 'SELECT * FROM users WHERE id = ?';
+        db.get(query, [decoded.id], (err, user) => {
+            if (err) {
+                console.error('Error getting user:', err);
+                res.status(500).json({ error: 'Database error' });
+                return;
+            }
+            
+            if (!user) {
+                res.status(404).json({ error: 'User not found' });
+                return;
+            }
+            
+            // Check admin status
+            const adminQuery = 'SELECT * FROM admins WHERE telegram_user_id = ?';
+            db.get(adminQuery, [user.telegram_id], (err, admin) => {
+                if (err) {
+                    console.error('Error checking admin status:', err);
+                }
+                
+                res.json({
+                    id: user.telegram_id,
+                    username: user.username,
+                    first_name: user.first_name,
+                    last_name: user.last_name,
+                    nickname: user.nickname,
+                    is_verified: user.is_verified || false,
+                    is_admin: !!admin,
+                    admin_username: admin ? admin.username : null
+                });
+            });
         });
-    });
+        
+    } catch (error) {
+        // Access token expired, try to refresh
+        try {
+            const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+            
+            // Get user from database
+            const query = 'SELECT * FROM users WHERE id = ?';
+            db.get(query, [decoded.id], (err, user) => {
+                if (err) {
+                    console.error('Error getting user:', err);
+                    res.status(500).json({ error: 'Database error' });
+                    return;
+                }
+                
+                if (!user) {
+                    res.status(404).json({ error: 'User not found' });
+                    return;
+                }
+                
+                // Check admin status
+                const adminQuery = 'SELECT * FROM admins WHERE telegram_user_id = ?';
+                db.get(adminQuery, [user.telegram_id], (err, admin) => {
+                    if (err) {
+                        console.error('Error checking admin status:', err);
+                    }
+                    
+                    const isAdmin = !!admin;
+                    const roles = isAdmin ? ['admin'] : ['user'];
+                    
+                    // Generate new tokens
+                    const newAccessToken = jwt.sign(
+                        { id: user.id, telegram_id: user.telegram_id, roles },
+                        JWT_ACCESS_SECRET,
+                        { expiresIn: '15m' }
+                    );
+                    
+                    const newRefreshToken = jwt.sign(
+                        { id: user.id, telegram_id: user.telegram_id, roles },
+                        JWT_REFRESH_SECRET,
+                        { expiresIn: '7d' }
+                    );
+                    
+                    // Set new cookies
+                    const cookieOptions = {
+                        httpOnly: true,
+                        secure: true,
+                        path: '/',
+                        sameSite: 'strict'
+                    };
+                    
+                    res.cookie('ACCESS_TOKEN', newAccessToken, cookieOptions);
+                    res.cookie('REFRESH_TOKEN', newRefreshToken, cookieOptions);
+                    
+                    res.json({
+                        id: user.telegram_id,
+                        username: user.username,
+                        first_name: user.first_name,
+                        last_name: user.last_name,
+                        nickname: user.nickname,
+                        is_verified: user.is_verified || false,
+                        is_admin: isAdmin,
+                        admin_username: admin ? admin.username : null
+                    });
+                });
+            });
+            
+        } catch (refreshError) {
+            res.status(401).json({ error: 'Invalid tokens' });
+        }
+    }
 });
 
 // Helper function to generate session token

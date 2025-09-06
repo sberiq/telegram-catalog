@@ -42,30 +42,43 @@ function generateSessionToken() {
 // Authenticate with Telegram Widget data
 async function authenticateWithTelegramWidget(user) {
     try {
-        const response = await fetch('/api/telegram/widget-auth', {
+        // Get initData from Telegram WebApp
+        const initData = window.Telegram.WebApp.initData;
+        
+        if (!initData) {
+            console.error('No initData available');
+            return false;
+        }
+        
+        const response = await fetch('/api/auth/signin', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
-                user: user,
-                sessionToken: sessionToken
-            })
+            body: JSON.stringify({
+                initData: initData
+            }),
+            credentials: 'include' // Important for cookies
         });
         
         const result = await response.json();
         
         if (response.ok) {
             console.log('Server authentication successful:', result);
+            // Update current user
+            currentUser = result.user;
             // Force UI update after successful authentication
             setTimeout(() => {
                 updateAuthUI();
             }, 100);
+            return true;
         } else {
             console.error('Server authentication failed:', result.error);
+            return false;
         }
     } catch (error) {
         console.error('Error authenticating with server:', error);
+        return false;
     }
 }
 
@@ -79,7 +92,7 @@ function getSessionToken() {
 
 // Check if user is authenticated
 function isUserAuthenticated() {
-    return currentUser !== null && sessionToken !== null;
+    return currentUser !== null;
 }
 
 // Update UI based on authentication status
@@ -147,9 +160,12 @@ function loginWithTelegram() {
 
 // Logout user
 function logoutUser() {
+    // Clear cookies by setting them to expire
+    document.cookie = 'ACCESS_TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    document.cookie = 'REFRESH_TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    
     currentUser = null;
     sessionToken = null;
-    localStorage.removeItem('session_token');
     updateAuthUI();
     showSuccess('Вы вышли из аккаунта');
 }
@@ -2085,29 +2101,28 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Telegram Widget will be initialized automatically when modal opens
     
-    // Check for existing session
-    const existingToken = localStorage.getItem('session_token');
-    if (existingToken) {
-        sessionToken = existingToken;
-        // Try to get user info
-        fetch('/api/user/me', {
-            headers: {
-                'Authorization': `Bearer ${sessionToken}`
-            }
-        })
-        .then(response => response.json())
-        .then(user => {
-            if (user.id) {
-                currentUser = user;
-                updateAuthUI();
-            }
-        })
-        .catch(() => {
-            // Invalid session, clear it
-            localStorage.removeItem('session_token');
-            sessionToken = null;
-        });
-    }
+    // Check for existing JWT session
+    fetch('/api/user/me', {
+        credentials: 'include' // Important for cookies
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.json();
+        } else {
+            throw new Error('Not authenticated');
+        }
+    })
+    .then(user => {
+        if (user.id) {
+            currentUser = user;
+            updateAuthUI();
+        }
+    })
+    .catch(() => {
+        // Not authenticated, clear any existing data
+        currentUser = null;
+        updateAuthUI();
+    });
     
     // Add event listeners
     document.getElementById('loginForm').addEventListener('submit', handleAdminLogin);
