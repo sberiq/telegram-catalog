@@ -99,7 +99,66 @@ function authenticateOptional(req, res, next) {
         // Try to authenticate with initData first
         return authenticateTMA(req, res, next);
     } else {
-        // If no initData, check if we have user info in request body or headers
+        // Check for session cookie first
+        const sessionCookie = req.cookies?.telegram_session;
+        if (sessionCookie) {
+            try {
+                const sessionData = JSON.parse(sessionCookie);
+                // Check if session is not too old (30 days)
+                if (Date.now() - sessionData.timestamp < 30 * 24 * 60 * 60 * 1000) {
+                    // Find user by ID from session
+                    const userQuery = 'SELECT * FROM users WHERE id = ?';
+                    db.get(userQuery, [sessionData.userId], (err, user) => {
+                        if (err) {
+                            console.error('Error getting user from session:', err);
+                            return res.status(500).json({ error: 'Database error' });
+                        }
+                        
+                        if (!user) {
+                            // Clear invalid session cookie
+                            res.clearCookie('telegram_session');
+                            req.user = null;
+                            return next();
+                        }
+                        
+                        // Check if user is blocked
+                        if (user.is_blocked) {
+                            res.clearCookie('telegram_session');
+                            return res.status(403).json({ error: 'Ваш аккаунт заблокирован' });
+                        }
+                        
+                        // Check admin status
+                        const adminQuery = 'SELECT * FROM admins WHERE telegram_user_id = ?';
+                        db.get(adminQuery, [user.telegram_id], (err, admin) => {
+                            if (err) {
+                                console.error('Error checking admin status:', err);
+                            }
+                            
+                            req.user = {
+                                id: user.id,
+                                telegram_id: user.telegram_id,
+                                username: user.username,
+                                first_name: user.first_name,
+                                last_name: user.last_name,
+                                is_admin: !!admin,
+                                admin_username: admin ? admin.username : null
+                            };
+                            
+                            next();
+                        });
+                    });
+                    return;
+                } else {
+                    // Session expired, clear cookie
+                    res.clearCookie('telegram_session');
+                }
+            } catch (e) {
+                // Invalid session cookie, clear it
+                res.clearCookie('telegram_session');
+            }
+        }
+        
+        // If no session cookie, check if we have user info in request body or headers
         const userId = req.body?.userId || req.header('x-user-id');
         
         if (userId) {
@@ -681,6 +740,25 @@ app.post('/api/auth/signin', (req, res) => {
                 
                 const isAdmin = !!admin;
                 
+                // Set secure HTTP-only cookie for session persistence
+                const sessionData = {
+                    userId: user.id,
+                    telegramId: user.telegram_id,
+                    username: user.username,
+                    firstName: user.first_name,
+                    lastName: user.last_name,
+                    isAdmin: isAdmin,
+                    timestamp: Date.now()
+                };
+                
+                // Set cookie that expires in 30 days
+                res.cookie('telegram_session', JSON.stringify(sessionData), {
+                    httpOnly: true,
+                    secure: true, // Only send over HTTPS
+                    sameSite: 'strict',
+                    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+                });
+                
                 res.json({
                     success: true,
                     message: 'User authenticated successfully',
@@ -715,6 +793,12 @@ app.get('/api/user/me', authenticateOptional, (req, res) => {
         is_admin: req.user.is_admin,
         admin_username: req.user.admin_username
     });
+});
+
+// Logout endpoint
+app.post('/api/auth/logout', (req, res) => {
+    res.clearCookie('telegram_session');
+    res.json({ success: true, message: 'Logged out successfully' });
 });
 
 // Helper function to generate session token

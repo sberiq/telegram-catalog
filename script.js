@@ -70,8 +70,10 @@ async function authenticateWithTelegramWidget(user) {
         const response = await fetch('/api/auth/signin', {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 'Authorization': `tma ${initData}`
-            }
+            },
+            credentials: 'include' // Include cookies
         });
         
         const result = await response.json();
@@ -174,7 +176,17 @@ function loginWithTelegram() {
 }
 
 // Logout user
-function logoutUser() {
+async function logoutUser() {
+    try {
+        // Call server logout endpoint to clear cookie
+        await fetch('/api/auth/logout', {
+            method: 'POST',
+            credentials: 'include'
+        });
+    } catch (error) {
+        console.error('Error logging out:', error);
+    }
+    
     currentUser = null;
     sessionToken = null;
     // Clear stored user data
@@ -256,9 +268,9 @@ async function performMainSearch() {
         
         // Search channels, tags, and channels by tag
         const [channelsResponse, tagsResponse, channelsByTagResponse] = await Promise.all([
-            fetch(`/api/channels/search?q=${encodeURIComponent(query)}`),
-            fetch(`/api/tags/search?q=${encodeURIComponent(query)}`),
-            fetch(`/api/channels/by-tag?tag=${encodeURIComponent(query)}`)
+            fetch(`/api/channels/search?q=${encodeURIComponent(query, { ...arguments[1], credentials: 'include' })}`),
+            fetch(`/api/tags/search?q=${encodeURIComponent(query, { ...arguments[1], credentials: 'include' })}`),
+            fetch(`/api/channels/by-tag?tag=${encodeURIComponent(query, { ...arguments[1], credentials: 'include' })}`)
         ]);
         
         const channels = await channelsResponse.json();
@@ -383,7 +395,7 @@ async function showRandomChannel() {
         resultsContainer.classList.remove('hidden');
         
         // Get random channel
-        const response = await fetch('/api/channels/random');
+        const response = await fetch('/api/channels/random', { ...arguments[1], credentials: 'include' });
         const channel = await response.json();
         
         if (response.ok) {
@@ -455,7 +467,7 @@ async function searchByTag(tagName) {
         resultsContainer.classList.remove('hidden');
         
         // Search channels by tag
-        const response = await fetch(`/api/channels/by-tag?tag=${encodeURIComponent(tagName)}`);
+        const response = await fetch(`/api/channels/by-tag?tag=${encodeURIComponent(tagName, { ...arguments[1], credentials: 'include' })}`);
         const channels = await response.json();
         
         // Display results
@@ -516,7 +528,7 @@ async function searchByTag(tagName) {
 // Legacy search functionality (for separate search page)
 async function loadSearchResults() {
     try {
-        const response = await fetch('/api/channels');
+        const response = await fetch('/api/channels', { ...arguments[1], credentials: 'include' });
         const channels = await response.json();
         displaySearchResults(channels);
     } catch (error) {
@@ -536,7 +548,7 @@ async function performSearch() {
     }
     
     try {
-        const response = await fetch(`/api/channels/search?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`/api/channels/search?q=${encodeURIComponent(query, { ...arguments[1], credentials: 'include' })}`);
         const channels = await response.json();
         displaySearchResults(channels);
     } catch (error) {
@@ -575,7 +587,7 @@ function displaySearchResults(channels) {
 // Channel details functionality
 async function loadChannelDetails(channelId) {
     try {
-        const response = await fetch(`/api/channels/${channelId}`);
+        const response = await fetch(`/api/channels/${channelId}`, { ...arguments[1], credentials: 'include' });
         const channel = await response.json();
         displayChannelDetails(channel);
     } catch (error) {
@@ -677,7 +689,7 @@ function displayChannelDetails(channel) {
 // Add channel functionality
 async function loadTags() {
     try {
-        const response = await fetch('/api/tags');
+        const response = await fetch('/api/tags', { ...arguments[1], credentials: 'include' });
         const tags = await response.json();
         displayTags(tags);
     } catch (error) {
@@ -710,9 +722,11 @@ document.getElementById('addChannelForm').addEventListener('submit', async (e) =
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify(channelData)
         });
         
@@ -751,9 +765,11 @@ async function handleAddReview(e) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify(reviewData)
         });
         
@@ -913,9 +929,11 @@ async function handleAdminLogin(e) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify({ username, password })
         });
         
@@ -1004,7 +1022,7 @@ function showAdminTab(tab) {
 
 async function loadAdminChannels() {
     try {
-        const response = await fetch('/api/admin/channels');
+        const response = await fetch('/api/admin/channels', { ...arguments[1], credentials: 'include' });
         const channels = await response.json();
         displayAdminChannels(channels);
     } catch (error) {
@@ -1057,7 +1075,7 @@ function displayAdminChannels(channels) {
 
 async function loadAdminReviews() {
     try {
-        const response = await fetch('/api/admin/reviews');
+        const response = await fetch('/api/admin/reviews', { ...arguments[1], credentials: 'include' });
         const reviews = await response.json();
         displayAdminReviews(reviews);
     } catch (error) {
@@ -1106,7 +1124,7 @@ function displayAdminReviews(reviews) {
 
 async function loadAdminTags() {
     try {
-        const response = await fetch('/api/admin/tags');
+        const response = await fetch('/api/admin/tags', { ...arguments[1], credentials: 'include' });
         const tags = await response.json();
         displayAdminTags(tags);
     } catch (error) {
@@ -1167,7 +1185,7 @@ async function performAdminSearch() {
     }
     
     try {
-        const response = await fetch(`/api/admin/search?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`/api/admin/search?q=${encodeURIComponent(query, { ...arguments[1], credentials: 'include' })}`);
         const results = await response.json();
         displayAdminSearchResults(results);
     } catch (error) {
@@ -1370,9 +1388,11 @@ async function handleAddTag(e) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify({ name: tagName })
         });
         
@@ -1410,9 +1430,11 @@ document.getElementById('addChannelForm').addEventListener('submit', async (e) =
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify(channelData)
         });
         
@@ -1435,7 +1457,7 @@ document.getElementById('addChannelForm').addEventListener('submit', async (e) =
 // Admin Management Functions
 async function loadAdminAdmins() {
     try {
-        const response = await fetch('/api/admin/admins');
+        const response = await fetch('/api/admin/admins', { ...arguments[1], credentials: 'include' });
         const admins = await response.json();
         displayAdminAdmins(admins);
     } catch (error) {
@@ -1499,7 +1521,7 @@ function displayAdminAdmins(admins) {
 // Load channels pending moderation
 async function loadAdminChannelsModeration() {
     try {
-        const response = await fetch('/api/admin/channels?status=pending');
+        const response = await fetch('/api/admin/channels?status=pending', { ...arguments[1], credentials: 'include' });
         const channels = await response.json();
         displayAdminChannelsModeration(channels);
     } catch (error) {
@@ -1548,7 +1570,7 @@ function displayAdminChannelsModeration(channels) {
 // Load reviews pending moderation
 async function loadAdminReviewsModeration() {
     try {
-        const response = await fetch('/api/admin/reviews?status=pending');
+        const response = await fetch('/api/admin/reviews?status=pending', { ...arguments[1], credentials: 'include' });
         const reviews = await response.json();
         displayAdminReviewsModeration(reviews);
     } catch (error) {
@@ -1628,9 +1650,11 @@ async function handleAddAdmin(e) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify({ username, password })
         });
         
@@ -1676,7 +1700,7 @@ async function deleteAdmin(adminId) {
 // Admin Users Functions
 async function loadAdminUsers() {
     try {
-        const response = await fetch('/api/admin/users?page=1&limit=50');
+        const response = await fetch('/api/admin/users?page=1&limit=50', { ...arguments[1], credentials: 'include' });
         const data = await response.json();
         displayAdminUsers(data.users, data.pagination);
     } catch (error) {
@@ -1770,7 +1794,7 @@ function displayAdminUsers(users, pagination) {
 // Admin Statistics Functions
 async function loadAdminStatistics() {
     try {
-        const response = await fetch('/api/admin/statistics');
+        const response = await fetch('/api/admin/statistics', { ...arguments[1], credentials: 'include' });
         const stats = await response.json();
         displayAdminStatistics(stats);
     } catch (error) {
@@ -1899,7 +1923,7 @@ function displayAdminStatistics(stats) {
 // Admin user management functions
 async function viewUserDetails(userId) {
     try {
-        const response = await fetch(`/api/admin/users/${userId}`);
+        const response = await fetch(`/api/admin/users/${userId}`, { ...arguments[1], credentials: 'include' });
         const user = await response.json();
         
         const modal = document.createElement('div');
@@ -1962,6 +1986,7 @@ async function verifyUser(userId) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             }
         });
@@ -1983,6 +2008,7 @@ async function unverifyUser(userId) {
         const response = await fetch(`/api/admin/users/${userId}/unverify`, {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             }
@@ -2014,9 +2040,11 @@ async function linkAdminTelegram(adminId) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify({
                 adminId: adminId,
                 telegramId: parseInt(telegramId)
@@ -2046,9 +2074,11 @@ async function unlinkAdminTelegram(adminId) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify({
                 adminId: adminId
             })
@@ -2081,9 +2111,11 @@ async function blockUser(userId) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify({
                 reason: reason
             })
@@ -2111,6 +2143,7 @@ async function unblockUser(userId) {
         const response = await fetch(`/api/admin/users/${userId}/unblock`, {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             }
@@ -2151,8 +2184,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (initData) {
         fetch('/api/user/me', {
             headers: {
+                ...getAuthHeaders(),
                 'Authorization': `tma ${initData}`
-            }
+            },
+            credentials: 'include' // Include cookies
         })
         .then(response => {
             if (response.ok) {
@@ -2171,10 +2206,52 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         })
         .catch(() => {
-            console.log('Telegram authentication failed, using stored data if available');
+            console.log('Telegram authentication failed, trying cookie authentication');
+            // Try cookie-based authentication
+            return fetch('/api/user/me', {
+                credentials: 'include'
+            });
+        })
+        .then(response => {
+            if (response && response.ok) {
+                return response.json();
+            }
+            throw new Error('No authentication available');
+        })
+        .then(user => {
+            if (user && user.id) {
+                currentUser = user;
+                localStorage.setItem('telegram_user', JSON.stringify(user));
+                updateAuthUI();
+                console.log('Authenticated with cookie:', user);
+            }
+        })
+        .catch(() => {
+            console.log('No authentication available, using stored data if available');
         });
     } else {
-        console.log('No Telegram initData available, using stored data if available');
+        console.log('No Telegram initData available, trying cookie authentication');
+        // Try cookie-based authentication
+        fetch('/api/user/me', {
+            credentials: 'include'
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            }
+            throw new Error('Not authenticated');
+        })
+        .then(user => {
+            if (user && user.id) {
+                currentUser = user;
+                localStorage.setItem('telegram_user', JSON.stringify(user));
+                updateAuthUI();
+                console.log('Authenticated with cookie:', user);
+            }
+        })
+        .catch(() => {
+            console.log('No cookie authentication available, using stored data if available');
+        });
     }
     
     // Add event listeners
@@ -2339,9 +2416,9 @@ function logoutUser() {
 async function loadProfileData() {
     try {
         const [profileResponse, reviewsResponse, favoritesResponse] = await Promise.all([
-            fetch(`/api/user/${currentUser.id}/profile`),
-            fetch(`/api/user/${currentUser.id}/reviews`),
-            fetch(`/api/user/${currentUser.id}/favorites`)
+            fetch(`/api/user/${currentUser.id}/profile`, { ...arguments[1], credentials: 'include' }),
+            fetch(`/api/user/${currentUser.id}/reviews`, { ...arguments[1], credentials: 'include' }),
+            fetch(`/api/user/${currentUser.id}/favorites`, { ...arguments[1], credentials: 'include' })
         ]);
         
         const profile = await profileResponse.json();
@@ -2439,9 +2516,11 @@ async function saveProfile() {
             
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify({
                 nickname: currentUser.nickname,
                 bio: bio,
@@ -2517,9 +2596,11 @@ async function linkAdminWithUser(telegramUserId) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify({
                 adminId: currentAdmin.id,
                 telegramUserId: telegramUserId
@@ -2552,9 +2633,11 @@ async function unlinkAdminFromUser() {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify({
                 adminId: currentAdmin.id
             })
@@ -2586,6 +2669,7 @@ async function approveChannel(channelId) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             }
         });
@@ -2616,9 +2700,11 @@ async function rejectChannel(channelId) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify({ reason })
         });
         
@@ -2644,6 +2730,7 @@ async function approveReview(reviewId) {
         const response = await fetch(`/api/admin/reviews/${reviewId}/approve`, {
             method: 'POST',
             headers: {
+                ...getAuthHeaders(),
                 ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             }
@@ -2675,9 +2762,11 @@ async function rejectReview(reviewId) {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify({ reason })
         });
         
@@ -2698,7 +2787,7 @@ async function rejectReview(reviewId) {
 async function editChannel(channelId) {
     try {
         // Get channel details
-        const response = await fetch(`/api/channels/${channelId}`);
+        const response = await fetch(`/api/channels/${channelId}`, { ...arguments[1], credentials: 'include' });
         const channel = await response.json();
         
         if (!response.ok) {
@@ -2807,9 +2896,11 @@ async function handleEditChannel(e) {
             
             headers: {
                 ...getAuthHeaders(),
+                ...getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             
+            credentials: 'include',
             body: JSON.stringify(formData)
         });
         
