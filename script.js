@@ -951,6 +951,62 @@ function clearAdminState() {
     localStorage.removeItem('currentAdmin');
 }
 
+// Check if user is admin via Telegram authentication
+async function checkTelegramAdminStatus() {
+    try {
+        // Get Telegram init data from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const initData = urlParams.get('tgWebAppData');
+        
+        if (!initData) {
+            return false;
+        }
+        
+        const response = await fetch('/api/admin/check-status', {
+            method: 'GET',
+            headers: {
+                'Authorization': `tma ${initData}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            if (result.isAdmin && result.user) {
+                // User is admin, auto-login
+                isAdminLoggedIn = true;
+                currentAdmin = {
+                    id: result.user.id,
+                    username: result.user.admin_username,
+                    telegram_id: result.user.telegram_id,
+                    first_name: result.user.first_name,
+                    last_name: result.user.last_name
+                };
+                
+                // Save admin state to localStorage
+                saveAdminState();
+                
+                // Hide login form and show dashboard
+                document.getElementById('adminLoginForm').style.display = 'none';
+                document.getElementById('adminDashboard').style.display = 'block';
+                document.getElementById('logoutBtn').style.display = 'block';
+                
+                // Switch to admin page
+                hideAllPages();
+                document.getElementById('adminPanelPage').classList.remove('hidden');
+                currentPage = 'admin';
+                loadAdminContent();
+                
+                showSuccess('Автоматический вход в админ панель выполнен');
+                return true;
+            }
+        }
+    } catch (error) {
+        console.error('Error checking Telegram admin status:', error);
+    }
+    return false;
+}
+
 function restoreAdminState() {
     const savedState = localStorage.getItem('isAdminLoggedIn');
     if (savedState === 'true') {
@@ -1056,7 +1112,14 @@ function logoutAdmin() {
 async function loadAdminContent() {
     // Check if admin is logged in
     if (!isAdminLoggedIn) {
-        // Try to restore admin state first
+        // First try to check Telegram admin status
+        const telegramAdmin = await checkTelegramAdminStatus();
+        if (telegramAdmin) {
+            await showAdminTab(currentAdminTab);
+            return;
+        }
+        
+        // If not Telegram admin, try to restore admin state
         const restored = restoreAdminState();
         if (!restored) {
             showError('Необходима авторизация');
@@ -2298,13 +2361,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize selected tags display
     updateSelectedTagsDisplay();
     
-    // Try to restore admin state
+    // Try to restore admin state or check Telegram admin status
     const adminRestored = restoreAdminState();
     if (!adminRestored) {
-        // Ensure admin dashboard is hidden on page load if not logged in
-        document.getElementById('adminDashboard').style.display = 'none';
-        document.getElementById('logoutBtn').style.display = 'none';
-        isAdminLoggedIn = false;
+        // Try to check Telegram admin status
+        checkTelegramAdminStatus().then(telegramAdmin => {
+            if (!telegramAdmin) {
+                // Ensure admin dashboard is hidden on page load if not logged in
+                document.getElementById('adminDashboard').style.display = 'none';
+                document.getElementById('logoutBtn').style.display = 'none';
+                isAdminLoggedIn = false;
+            }
+        });
     }
     
     // Add main-page class for black and white theme

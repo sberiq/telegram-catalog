@@ -1646,8 +1646,8 @@ app.post("/api/channels", checkUserOptional, (req, res) => {
     
     // Get user ID if user is authenticated, otherwise use null for anonymous
     const userId = req.user ? req.user.id : null;
-    
-    insertChannel();
+        
+        insertChannel();
     
     function insertChannel() {
         const insertQuery = `
@@ -1728,9 +1728,9 @@ app.post("/api/channels/:id/reviews", checkUserOptional, (req, res) => {
         // Anonymous user with nickname
         userDisplayName = nickname.trim();
         isAnonymousReview = false; // Not anonymous if nickname provided
-    }
-    
-    insertReview();
+        }
+        
+        insertReview();
     
     function insertReview() {
         // Check if channel exists
@@ -3200,6 +3200,25 @@ app.put('/api/admin/channels/:id', (req, res) => {
         }
         
         res.json({ success: true, message: 'Channel updated successfully' });
+    });
+});
+
+// Check if user is admin (for auto-login)
+app.get('/api/admin/check-status', authenticateOptional, (req, res) => {
+    if (!req.user) {
+        return res.json({ isAdmin: false, user: null });
+    }
+    
+    res.json({ 
+        isAdmin: req.user.is_admin, 
+        user: {
+            id: req.user.id,
+            telegram_id: req.user.telegram_id,
+            username: req.user.username,
+            first_name: req.user.first_name,
+            last_name: req.user.last_name,
+            admin_username: req.user.admin_username
+        }
     });
 });
 
